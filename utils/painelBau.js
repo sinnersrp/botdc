@@ -10,7 +10,7 @@ const {
 } = require("discord.js");
 
 const ControleBau = require("../models/ControleBau");
-const { canais, todosItens, itensGerais, itensArmas } = require("../config/config");
+const { canais, itensGerais, itensArmas } = require("../config/config");
 const { isGerenteOuLider } = require("./permissoes");
 
 const BAU_BUTTON_ENTRADA = "bau_painel_entrada";
@@ -35,13 +35,16 @@ const ITENS_LABEL = {
   adrenalina: "📦 Adrenalina",
   bandagem: "📦 Bandagem",
   hacking: "📦 Hacking",
+  capuz: "📦 Capuz",
   "muni pt": "🔫 Muni PT",
   "muni sub": "🔫 Muni SUB",
+  "muni de refle": "🔫 Muni de Refle",
   sub: "🔫 SUB",
   fiveseven: "🔫 FiveSeven",
   hhk: "🔫 HHK",
   c4: "🔫 C4",
-  mp5: "🔫 MP5"
+  mp5: "🔫 MP5",
+  g36: "🔫 G36"
 };
 
 function getTipoItem(item) {
@@ -101,11 +104,7 @@ function criarPainelBau() {
 
 function criarMenuSelecao(action) {
   const customId = action === "entrada" ? BAU_SELECT_ENTRADA : BAU_SELECT_SAIDA;
-
-  const itensOrdenados = [
-    ...itensArmas,
-    ...itensGerais
-  ];
+  const itensOrdenados = [...itensArmas, ...itensGerais];
 
   const menu = new StringSelectMenuBuilder()
     .setCustomId(customId)
@@ -159,10 +158,7 @@ function parseModalInfo(customId) {
 
 function lerQuantidadesModal(interaction, itens) {
   return itens.map((item, index) => {
-    const valor = interaction.fields
-      .getTextInputValue(`quantidade_${index + 1}`)
-      .trim();
-
+    const valor = interaction.fields.getTextInputValue(`quantidade_${index + 1}`).trim();
     const quantidade = Number(valor);
 
     if (!Number.isInteger(quantidade) || quantidade <= 0) {
@@ -199,20 +195,16 @@ async function abrirSelecaoSaidaBau(interaction) {
 
 async function processarSelecaoBauGerencia(interaction) {
   let action = null;
-
   if (interaction.customId === BAU_SELECT_ENTRADA) action = "entrada";
   if (interaction.customId === BAU_SELECT_SAIDA) action = "saida";
-
   if (!action) return;
 
   const itens = interaction.values;
-
   if (!itens.length) {
     return interaction.reply({ content: "❌ Nenhum item selecionado.", flags: 64 });
   }
 
-  const modal = criarModalQuantidades(action, itens);
-  await interaction.showModal(modal);
+  await interaction.showModal(criarModalQuantidades(action, itens));
 }
 
 async function processarModalBauGerencia(interaction) {
@@ -232,7 +224,6 @@ async function processarModalBauGerencia(interaction) {
 
     for (const par of pares) {
       const tipo = getTipoItem(par.item);
-
       if (!tipo) {
         return interaction.reply({ content: `❌ O item **${par.item}** é inválido.`, flags: 64 });
       }
@@ -266,7 +257,6 @@ async function processarModalBauGerencia(interaction) {
 
     for (const par of pares) {
       const estoque = await ControleBau.findOne({ item: `gerencia_${par.item}` });
-
       if (!estoque || estoque.quantidade < par.quantidade) {
         return interaction.reply({
           content: `❌ Estoque insuficiente para ${formatarNomeItem(par.item)}.`,
@@ -281,7 +271,6 @@ async function processarModalBauGerencia(interaction) {
       const estoque = await ControleBau.findOne({ item: `gerencia_${par.item}` });
       estoque.quantidade -= par.quantidade;
       await estoque.save();
-
       resposta.push(`• ${formatarNomeItem(par.item)}: ${par.quantidade}`);
     }
 
@@ -297,21 +286,40 @@ async function verEstoqueBauGerencia(interaction) {
     return interaction.reply({ content: "❌ Apenas gerência pode usar este painel.", flags: 64 });
   }
 
-  const itens = await ControleBau.find({
-    item: { $regex: /^gerencia_/ }
-  }).sort({ item: 1 });
+  const itens = await ControleBau.find({ item: { $regex: /^gerencia_/ } }).sort({ item: 1 });
 
   if (!itens.length) {
     return interaction.reply({ content: "📦 O baú da gerência está vazio.", flags: 64 });
   }
 
-  const linhas = itens.map((item) => {
+  const armas = [];
+  const gerais = [];
+
+  for (const item of itens) {
     const nomeLimpo = item.item.replace("gerencia_", "");
-    return `• ${formatarNomeItem(nomeLimpo)}: ${item.quantidade}`;
-  });
+    const linha = `• ${formatarNomeItem(nomeLimpo)}: ${item.quantidade}`;
+
+    if (item.tipo === "arma") armas.push(linha);
+    else gerais.push(linha);
+  }
+
+  const embed = new EmbedBuilder()
+    .setTitle("📦 Estoque do Baú da Gerência")
+    .addFields(
+      {
+        name: "🔫 Armas e munições",
+        value: armas.length ? armas.join("\n") : "Nenhum item",
+        inline: false
+      },
+      {
+        name: "📦 Produtos gerais",
+        value: gerais.length ? gerais.join("\n") : "Nenhum item",
+        inline: false
+      }
+    );
 
   return interaction.reply({
-    content: `📦 **Estoque do baú da gerência**\n${linhas.join("\n")}`,
+    embeds: [embed],
     flags: 64
   });
 }

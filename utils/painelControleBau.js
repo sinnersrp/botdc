@@ -11,7 +11,7 @@ const {
 
 const ControleBau = require("../models/ControleBau");
 const MovimentacaoBau = require("../models/MovimentacaoBau");
-const { canais, todosItens, itensGerais, itensArmas } = require("../config/config");
+const { canais, itensGerais, itensArmas } = require("../config/config");
 const { isGerenteOuLider, isMembro } = require("./permissoes");
 const logBau = require("./logBau");
 
@@ -39,13 +39,16 @@ const ITENS_LABEL = {
   adrenalina: "📦 Adrenalina",
   bandagem: "📦 Bandagem",
   hacking: "📦 Hacking",
+  capuz: "📦 Capuz",
   "muni pt": "🔫 Muni PT",
   "muni sub": "🔫 Muni SUB",
+  "muni de refle": "🔫 Muni de Refle",
   sub: "🔫 SUB",
   fiveseven: "🔫 FiveSeven",
   hhk: "🔫 HHK",
   c4: "🔫 C4",
-  mp5: "🔫 MP5"
+  mp5: "🔫 MP5",
+  g36: "🔫 G36"
 };
 
 function getTipoItem(item) {
@@ -130,10 +133,7 @@ function criarPainelControleBau() {
 }
 
 function criarMenuSelecao(action) {
-  const itensOrdenados = [
-    ...itensArmas,
-    ...itensGerais
-  ];
+  const itensOrdenados = [...itensArmas, ...itensGerais];
 
   const menu = new StringSelectMenuBuilder()
     .setCustomId(getSelectCustomIdByAction(action))
@@ -157,9 +157,7 @@ function criarMenuSelecao(action) {
 
 function criarModalQuantidades(action, itens) {
   const modal = new ModalBuilder()
-    .setCustomId(
-      `${CONTROLE_MODAL_PREFIX}:${action}:${itens.map(encodeItem).join(",")}`
-    )
+    .setCustomId(`${CONTROLE_MODAL_PREFIX}:${action}:${itens.map(encodeItem).join(",")}`)
     .setTitle(`${getActionTitle(action)} no controle de baú`);
 
   const rows = itens.map((item, index) => {
@@ -186,20 +184,14 @@ function parseModalInfo(customId) {
 
 function lerQuantidadesModal(interaction, itens) {
   return itens.map((item, index) => {
-    const valor = interaction.fields
-      .getTextInputValue(`quantidade_${index + 1}`)
-      .trim();
-
+    const valor = interaction.fields.getTextInputValue(`quantidade_${index + 1}`).trim();
     const quantidade = Number(valor);
 
     if (!Number.isInteger(quantidade) || quantidade <= 0) {
       throw new Error(`Quantidade inválida para ${formatarNomeItem(item)}.`);
     }
 
-    return {
-      item,
-      quantidade
-    };
+    return { item, quantidade };
   });
 }
 
@@ -259,11 +251,9 @@ async function abrirSelecaoDevolver(interaction) {
 
 async function processarSelecaoControleBau(interaction) {
   let action = null;
-
   if (interaction.customId === CONTROLE_SELECT_LIBERAR) action = "liberar";
   if (interaction.customId === CONTROLE_SELECT_RETIRAR) action = "retirar";
   if (interaction.customId === CONTROLE_SELECT_DEVOLVER) action = "devolver";
-
   if (!action) return;
 
   const itens = interaction.values;
@@ -275,8 +265,7 @@ async function processarSelecaoControleBau(interaction) {
     });
   }
 
-  const modal = criarModalQuantidades(action, itens);
-  await interaction.showModal(modal);
+  await interaction.showModal(criarModalQuantidades(action, itens));
 }
 
 async function processarModalControleBau(interaction, client) {
@@ -515,10 +504,32 @@ async function verEstoqueControleBau(interaction) {
     });
   }
 
-  const linhas = itens.map((item) => `• ${formatarNomeItem(item.item)}: ${item.quantidade}`);
+  const armas = [];
+  const gerais = [];
+
+  for (const item of itens) {
+    const linha = `• ${formatarNomeItem(item.item)}: ${item.quantidade}`;
+    if (item.tipo === "arma") armas.push(linha);
+    else gerais.push(linha);
+  }
+
+  const embed = new EmbedBuilder()
+    .setTitle("📦 Estoque do Controle de Baú")
+    .addFields(
+      {
+        name: "🔫 Armas e munições",
+        value: armas.length ? armas.join("\n") : "Nenhum item",
+        inline: false
+      },
+      {
+        name: "📦 Produtos gerais",
+        value: gerais.length ? gerais.join("\n") : "Nenhum item",
+        inline: false
+      }
+    );
 
   return interaction.reply({
-    content: `📦 **Estoque do controle de baú**\n${linhas.join("\n")}`,
+    embeds: [embed],
     flags: 64
   });
 }

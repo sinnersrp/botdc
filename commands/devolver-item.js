@@ -18,12 +18,15 @@ const opcoesItens = [
   { name: "📦 Adrenalina", value: "adrenalina" },
   { name: "📦 Bandagem", value: "bandagem" },
   { name: "📦 Hacking", value: "hacking" },
+  { name: "📦 Capuz", value: "capuz" },
   { name: "🔫 Muni PT", value: "muni pt" },
   { name: "🔫 Muni SUB", value: "muni sub" },
+  { name: "🔫 Muni de Refle", value: "muni de refle" },
   { name: "🔫 SUB", value: "sub" },
   { name: "🔫 FiveSeven", value: "fiveseven" },
   { name: "🔫 HHK", value: "hhk" },
   { name: "🔫 MP5", value: "mp5" },
+  { name: "🔫 G36", value: "g36" },
   { name: "🔫 C4", value: "c4" }
 ];
 

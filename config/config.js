@@ -50,17 +50,20 @@ module.exports = {
     "chip ilegal",
     "adrenalina",
     "bandagem",
-    "hacking"
+    "hacking",
+    "capuz"
   ],
 
   itensArmas: [
     "muni pt",
     "muni sub",
+    "muni de refle",
     "sub",
     "fiveseven",
     "hhk",
     "c4",
-    "mp5"
+    "mp5",
+    "g36"
   ],
 
   todosItens: [
@@ -76,12 +79,15 @@ module.exports = {
     "adrenalina",
     "bandagem",
     "hacking",
+    "capuz",
     "muni pt",
     "muni sub",
+    "muni de refle",
     "sub",
     "fiveseven",
     "hhk",
     "c4",
-    "mp5"
+    "mp5",
+    "g36"
   ]
 };

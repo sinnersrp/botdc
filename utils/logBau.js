@@ -15,13 +15,16 @@ function formatarNomeItem(item = "") {
     adrenalina: "Adrenalina",
     bandagem: "Bandagem",
     hacking: "Hacking",
+    capuz: "Capuz",
     "muni pt": "Muni PT",
     "muni sub": "Muni SUB",
+    "muni de refle": "Muni de Refle",
     sub: "SUB",
     fiveseven: "FiveSeven",
     hhk: "HHK",
     c4: "C4",
-    mp5: "MP5"
+    mp5: "MP5",
+    g36: "G36"
   };
 
   return mapa[item] || item || "Não informado";
