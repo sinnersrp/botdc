@@ -150,7 +150,7 @@ async function processarMensagemComprovanteFarm(message, client) {
     await FarmRegistro.create({
       userId: pendente.userId,
       username: pendente.username,
-      cargo: "Membro",
+      cargo: "membro",
       valor: pendente.valor,
       comprovante: anexo.url,
       semanaId: pendente.semanaId,
