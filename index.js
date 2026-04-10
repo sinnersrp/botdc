@@ -16,12 +16,13 @@ const {
   BAU_BUTTON_ENTRADA,
   BAU_BUTTON_SAIDA,
   BAU_BUTTON_VER,
-  BAU_MODAL_ENTRADA,
-  BAU_MODAL_SAIDA,
-  abrirModalBauEntrada,
-  abrirModalBauSaida,
-  processarModalBauEntrada,
-  processarModalBauSaida,
+  BAU_SELECT_ENTRADA,
+  BAU_SELECT_SAIDA,
+  BAU_MODAL_PREFIX,
+  abrirSelecaoEntradaBau,
+  abrirSelecaoSaidaBau,
+  processarModalBauGerencia,
+  processarSelecaoBauGerencia,
   verEstoqueBauGerencia
 } = require("./utils/painelBau");
 
@@ -83,12 +84,12 @@ client.on("interactionCreate", async (interaction) => {
       }
 
       if (interaction.customId === BAU_BUTTON_ENTRADA) {
-        await abrirModalBauEntrada(interaction);
+        await abrirSelecaoEntradaBau(interaction);
         return;
       }
 
       if (interaction.customId === BAU_BUTTON_SAIDA) {
-        await abrirModalBauSaida(interaction);
+        await abrirSelecaoSaidaBau(interaction);
         return;
       }
 
@@ -124,6 +125,14 @@ client.on("interactionCreate", async (interaction) => {
       console.log(`📚 Menu selecionado: ${interaction.customId} por ${interaction.user.tag}`);
 
       if (
+        interaction.customId === BAU_SELECT_ENTRADA ||
+        interaction.customId === BAU_SELECT_SAIDA
+      ) {
+        await processarSelecaoBauGerencia(interaction);
+        return;
+      }
+
+      if (
         interaction.customId === CONTROLE_SELECT_LIBERAR ||
         interaction.customId === CONTROLE_SELECT_RETIRAR ||
         interaction.customId === CONTROLE_SELECT_DEVOLVER
@@ -143,13 +152,8 @@ client.on("interactionCreate", async (interaction) => {
         return;
       }
 
-      if (interaction.customId === BAU_MODAL_ENTRADA) {
-        await processarModalBauEntrada(interaction);
-        return;
-      }
-
-      if (interaction.customId === BAU_MODAL_SAIDA) {
-        await processarModalBauSaida(interaction);
+      if (interaction.customId.startsWith(`${BAU_MODAL_PREFIX}:`)) {
+        await processarModalBauGerencia(interaction);
         return;
       }
 

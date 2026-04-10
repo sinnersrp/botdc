@@ -4,6 +4,7 @@ const {
   ButtonStyle,
   EmbedBuilder,
   ModalBuilder,
+  StringSelectMenuBuilder,
   TextInputBuilder,
   TextInputStyle
 } = require("discord.js");
@@ -16,8 +17,10 @@ const BAU_BUTTON_ENTRADA = "bau_painel_entrada";
 const BAU_BUTTON_SAIDA = "bau_painel_saida";
 const BAU_BUTTON_VER = "bau_painel_ver";
 
-const BAU_MODAL_ENTRADA = "bau_modal_entrada";
-const BAU_MODAL_SAIDA = "bau_modal_saida";
+const BAU_SELECT_ENTRADA = "bau_select_entrada";
+const BAU_SELECT_SAIDA = "bau_select_saida";
+
+const BAU_MODAL_PREFIX = "bau_modal";
 
 const ITENS_LABEL = {
   maconha: "Maconha",
@@ -44,6 +47,14 @@ function formatarNomeItem(item) {
   return ITENS_LABEL[item] || item;
 }
 
+function encodeItem(item) {
+  return item.replaceAll(" ", "~");
+}
+
+function decodeItem(item) {
+  return item.replaceAll("~", " ");
+}
+
 function criarPainelBau() {
   const embed = new EmbedBuilder()
     .setTitle("📦 Painel do Baú da Gerência")
@@ -51,14 +62,7 @@ function criarPainelBau() {
       [
         "Use os botões abaixo para gerenciar o baú da gerência.",
         "",
-        "**Entrada/Saída:**",
-        "Preencha até 3 linhas no formato:",
-        "`item | quantidade`",
-        "",
-        "**Exemplo:**",
-        "`maconha | 100`",
-        "`cocaina | 50`",
-        "`fiveseven | 10`"
+        "Agora você escolhe os produtos por **menu** e depois informa só as **quantidades**."
       ].join("\n")
     );
 
@@ -86,201 +90,94 @@ function criarPainelBau() {
   };
 }
 
-function criarModalBauEntrada() {
-  const modal = new ModalBuilder()
-    .setCustomId(BAU_MODAL_ENTRADA)
-    .setTitle("Entrada no baú da gerência");
+function criarMenuSelecao(action) {
+  const customId = action === "entrada" ? BAU_SELECT_ENTRADA : BAU_SELECT_SAIDA;
 
-  const linha1 = new TextInputBuilder()
-    .setCustomId("linha1")
-    .setLabel("Linha 1")
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder("maconha | 100")
-    .setRequired(true);
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(customId)
+    .setPlaceholder("Selecione até 3 produtos")
+    .setMinValues(1)
+    .setMaxValues(3)
+    .addOptions(
+      todosItens.map((item) => ({
+        label: formatarNomeItem(item),
+        value: item,
+        description: getTipoItem(item) === "arma" ? "Arma" : "Geral"
+      }))
+    );
 
-  const linha2 = new TextInputBuilder()
-    .setCustomId("linha2")
-    .setLabel("Linha 2")
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder("cocaina | 50")
-    .setRequired(false);
-
-  const linha3 = new TextInputBuilder()
-    .setCustomId("linha3")
-    .setLabel("Linha 3")
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder("fiveseven | 10")
-    .setRequired(false);
-
-  modal.addComponents(
-    new ActionRowBuilder().addComponents(linha1),
-    new ActionRowBuilder().addComponents(linha2),
-    new ActionRowBuilder().addComponents(linha3)
-  );
-
-  return modal;
-}
-
-function criarModalBauSaida() {
-  const modal = new ModalBuilder()
-    .setCustomId(BAU_MODAL_SAIDA)
-    .setTitle("Saída no baú da gerência");
-
-  const linha1 = new TextInputBuilder()
-    .setCustomId("linha1")
-    .setLabel("Linha 1")
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder("maconha | 100")
-    .setRequired(true);
-
-  const linha2 = new TextInputBuilder()
-    .setCustomId("linha2")
-    .setLabel("Linha 2")
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder("cocaina | 50")
-    .setRequired(false);
-
-  const linha3 = new TextInputBuilder()
-    .setCustomId("linha3")
-    .setLabel("Linha 3")
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder("fiveseven | 10")
-    .setRequired(false);
-
-  modal.addComponents(
-    new ActionRowBuilder().addComponents(linha1),
-    new ActionRowBuilder().addComponents(linha2),
-    new ActionRowBuilder().addComponents(linha3)
-  );
-
-  return modal;
-}
-
-function parseLinha(linha) {
-  if (!linha || !linha.trim()) return null;
-
-  const partes = linha.split("|").map((p) => p.trim()).filter(Boolean);
-
-  if (partes.length !== 2) {
-    throw new Error(`Formato inválido em "${linha}". Use: item | quantidade`);
-  }
-
-  const item = partes[0].toLowerCase();
-  const quantidade = Number(partes[1]);
-
-  if (!todosItens.includes(item)) {
-    throw new Error(`Item inválido: ${item}`);
-  }
-
-  if (!Number.isInteger(quantidade) || quantidade <= 0) {
-    throw new Error(`Quantidade inválida para ${item}`);
-  }
-
-  return { item, quantidade };
-}
-
-function obterLinhasModal(interaction) {
-  const linhasRaw = [
-    interaction.fields.getTextInputValue("linha1"),
-    interaction.fields.getTextInputValue("linha2"),
-    interaction.fields.getTextInputValue("linha3")
-  ];
-
-  const pares = linhasRaw
-    .map((linha) => parseLinha(linha))
-    .filter(Boolean);
-
-  const itensUsados = new Set();
-
-  for (const par of pares) {
-    if (itensUsados.has(par.item)) {
-      throw new Error(`O item "${par.item}" foi repetido no mesmo formulário.`);
-    }
-    itensUsados.add(par.item);
-  }
-
-  return pares;
-}
-
-async function abrirModalBauEntrada(interaction) {
-  if (!isGerenteOuLider(interaction.member)) {
-    return interaction.reply({
-      content: "❌ Apenas gerência pode usar este painel.",
-      flags: 64
-    });
-  }
-
-  if (interaction.channel.id !== canais.entradaBauGerencia) {
-    return interaction.reply({
-      content: "❌ Use o painel no canal de entrada do baú da gerência.",
-      flags: 64
-    });
-  }
-
-  await interaction.showModal(criarModalBauEntrada());
-}
-
-async function abrirModalBauSaida(interaction) {
-  if (!isGerenteOuLider(interaction.member)) {
-    return interaction.reply({
-      content: "❌ Apenas gerência pode usar este painel.",
-      flags: 64
-    });
-  }
-
-  if (interaction.channel.id !== canais.saidaBauGerencia) {
-    return interaction.reply({
-      content: "❌ Use o painel no canal de saída do baú da gerência.",
-      flags: 64
-    });
-  }
-
-  await interaction.showModal(criarModalBauSaida());
-}
-
-async function processarModalBauEntrada(interaction) {
-  if (!isGerenteOuLider(interaction.member)) {
-    return interaction.reply({
-      content: "❌ Apenas gerência pode usar este painel.",
-      flags: 64
-    });
-  }
-
-  if (interaction.channel.id !== canais.entradaBauGerencia) {
-    return interaction.reply({
-      content: "❌ Use este formulário no canal de entrada do baú da gerência.",
-      flags: 64
-    });
-  }
-
-  const pares = obterLinhasModal(interaction);
-  const resposta = [];
-
-  for (const par of pares) {
-    const tipo = getTipoItem(par.item);
-    let estoque = await ControleBau.findOne({ item: `gerencia_${par.item}` });
-
-    if (!estoque) {
-      estoque = new ControleBau({
-        item: `gerencia_${par.item}`,
-        quantidade: par.quantidade,
-        tipo
-      });
-    } else {
-      estoque.quantidade += par.quantidade;
-    }
-
-    await estoque.save();
-    resposta.push(`• ${formatarNomeItem(par.item)}: ${par.quantidade}`);
-  }
-
-  return interaction.reply({
-    content: `✅ Entrada registrada no baú da gerência:\n${resposta.join("\n")}`,
+  return {
+    content:
+      action === "entrada"
+        ? "📥 **Entrada no baú da gerência**\nSelecione até 3 produtos abaixo."
+        : "📤 **Saída no baú da gerência**\nSelecione até 3 produtos abaixo.",
+    components: [new ActionRowBuilder().addComponents(menu)],
     flags: 64
+  };
+}
+
+function criarModalQuantidades(action, itens) {
+  const modal = new ModalBuilder()
+    .setCustomId(`${BAU_MODAL_PREFIX}:${action}:${itens.map(encodeItem).join(",")}`)
+    .setTitle(action === "entrada" ? "Entrada no baú da gerência" : "Saída no baú da gerência");
+
+  const rows = itens.map((item, index) => {
+    const input = new TextInputBuilder()
+      .setCustomId(`quantidade_${index + 1}`)
+      .setLabel(formatarNomeItem(item))
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder("Digite a quantidade")
+      .setRequired(true)
+      .setMaxLength(10);
+
+    return new ActionRowBuilder().addComponents(input);
+  });
+
+  modal.addComponents(...rows);
+  return modal;
+}
+
+function parseModalInfo(customId) {
+  const [, action, rawItens] = customId.split(":");
+  const itens = rawItens.split(",").map(decodeItem);
+  return { action, itens };
+}
+
+function lerQuantidadesModal(interaction, itens) {
+  return itens.map((item, index) => {
+    const valor = interaction.fields
+      .getTextInputValue(`quantidade_${index + 1}`)
+      .trim();
+
+    const quantidade = Number(valor);
+
+    if (!Number.isInteger(quantidade) || quantidade <= 0) {
+      throw new Error(`Quantidade inválida para ${formatarNomeItem(item)}.`);
+    }
+
+    return { item, quantidade };
   });
 }
 
-async function processarModalBauSaida(interaction) {
+async function abrirSelecaoEntradaBau(interaction) {
+  if (!isGerenteOuLider(interaction.member)) {
+    return interaction.reply({
+      content: "❌ Apenas gerência pode usar este painel.",
+      flags: 64
+    });
+  }
+
+  if (interaction.channel.id !== canais.entradaBauGerencia) {
+    return interaction.reply({
+      content: "❌ Use este painel no canal de entrada do baú da gerência.",
+      flags: 64
+    });
+  }
+
+  return interaction.reply(criarMenuSelecao("entrada"));
+}
+
+async function abrirSelecaoSaidaBau(interaction) {
   if (!isGerenteOuLider(interaction.member)) {
     return interaction.reply({
       content: "❌ Apenas gerência pode usar este painel.",
@@ -290,36 +187,122 @@ async function processarModalBauSaida(interaction) {
 
   if (interaction.channel.id !== canais.saidaBauGerencia) {
     return interaction.reply({
-      content: "❌ Use este formulário no canal de saída do baú da gerência.",
+      content: "❌ Use este painel no canal de saída do baú da gerência.",
       flags: 64
     });
   }
 
-  const pares = obterLinhasModal(interaction);
+  return interaction.reply(criarMenuSelecao("saida"));
+}
 
-  for (const par of pares) {
-    const estoque = await ControleBau.findOne({ item: `gerencia_${par.item}` });
-    if (!estoque || estoque.quantidade < par.quantidade) {
+async function processarSelecaoBauGerencia(interaction) {
+  let action = null;
+
+  if (interaction.customId === BAU_SELECT_ENTRADA) action = "entrada";
+  if (interaction.customId === BAU_SELECT_SAIDA) action = "saida";
+
+  if (!action) return;
+
+  const itens = interaction.values;
+
+  if (!itens.length) {
+    return interaction.reply({
+      content: "❌ Nenhum item selecionado.",
+      flags: 64
+    });
+  }
+
+  const modal = criarModalQuantidades(action, itens);
+  await interaction.showModal(modal);
+}
+
+async function processarModalBauGerencia(interaction) {
+  const { action, itens } = parseModalInfo(interaction.customId);
+  const pares = lerQuantidadesModal(interaction, itens);
+
+  if (!isGerenteOuLider(interaction.member)) {
+    return interaction.reply({
+      content: "❌ Apenas gerência pode usar este painel.",
+      flags: 64
+    });
+  }
+
+  if (action === "entrada") {
+    if (interaction.channel.id !== canais.entradaBauGerencia) {
       return interaction.reply({
-        content: `❌ Estoque insuficiente para ${formatarNomeItem(par.item)}.`,
+        content: "❌ Use este formulário no canal de entrada do baú da gerência.",
         flags: 64
       });
     }
+
+    const resposta = [];
+
+    for (const par of pares) {
+      const tipo = getTipoItem(par.item);
+
+      if (!tipo) {
+        return interaction.reply({
+          content: `❌ O item **${par.item}** é inválido.`,
+          flags: 64
+        });
+      }
+
+      let estoque = await ControleBau.findOne({ item: `gerencia_${par.item}` });
+
+      if (!estoque) {
+        estoque = new ControleBau({
+          item: `gerencia_${par.item}`,
+          quantidade: par.quantidade,
+          tipo
+        });
+      } else {
+        estoque.quantidade += par.quantidade;
+      }
+
+      await estoque.save();
+      resposta.push(`• ${formatarNomeItem(par.item)}: ${par.quantidade}`);
+    }
+
+    return interaction.reply({
+      content: `✅ Entrada registrada no baú da gerência:\n${resposta.join("\n")}`,
+      flags: 64
+    });
   }
 
-  const resposta = [];
+  if (action === "saida") {
+    if (interaction.channel.id !== canais.saidaBauGerencia) {
+      return interaction.reply({
+        content: "❌ Use este formulário no canal de saída do baú da gerência.",
+        flags: 64
+      });
+    }
 
-  for (const par of pares) {
-    const estoque = await ControleBau.findOne({ item: `gerencia_${par.item}` });
-    estoque.quantidade -= par.quantidade;
-    await estoque.save();
-    resposta.push(`• ${formatarNomeItem(par.item)}: ${par.quantidade}`);
+    for (const par of pares) {
+      const estoque = await ControleBau.findOne({ item: `gerencia_${par.item}` });
+
+      if (!estoque || estoque.quantidade < par.quantidade) {
+        return interaction.reply({
+          content: `❌ Estoque insuficiente para ${formatarNomeItem(par.item)}.`,
+          flags: 64
+        });
+      }
+    }
+
+    const resposta = [];
+
+    for (const par of pares) {
+      const estoque = await ControleBau.findOne({ item: `gerencia_${par.item}` });
+      estoque.quantidade -= par.quantidade;
+      await estoque.save();
+
+      resposta.push(`• ${formatarNomeItem(par.item)}: ${par.quantidade}`);
+    }
+
+    return interaction.reply({
+      content: `📤 Saída registrada no baú da gerência:\n${resposta.join("\n")}`,
+      flags: 64
+    });
   }
-
-  return interaction.reply({
-    content: `📤 Saída registrada no baú da gerência:\n${resposta.join("\n")}`,
-    flags: 64
-  });
 }
 
 async function verEstoqueBauGerencia(interaction) {
@@ -356,12 +339,13 @@ module.exports = {
   BAU_BUTTON_ENTRADA,
   BAU_BUTTON_SAIDA,
   BAU_BUTTON_VER,
-  BAU_MODAL_ENTRADA,
-  BAU_MODAL_SAIDA,
-  abrirModalBauEntrada,
-  abrirModalBauSaida,
+  BAU_SELECT_ENTRADA,
+  BAU_SELECT_SAIDA,
+  BAU_MODAL_PREFIX,
+  abrirSelecaoEntradaBau,
+  abrirSelecaoSaidaBau,
   criarPainelBau,
-  processarModalBauEntrada,
-  processarModalBauSaida,
+  processarModalBauGerencia,
+  processarSelecaoBauGerencia,
   verEstoqueBauGerencia
 };
