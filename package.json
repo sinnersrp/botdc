@@ -1,0 +1,20 @@
+{
+  "name": "bot-familia",
+  "version": "1.0.0",
+  "description": "Bot da família com farm semanal e controle de baú",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "deploy": "node deploy-commands.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "discord.js": "^14.25.1",
+    "dotenv": "^17.3.1",
+    "mongoose": "^9.3.3",
+    "node-cron": "^4.2.1"
+  }
+}
