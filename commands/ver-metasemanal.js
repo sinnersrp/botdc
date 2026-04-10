@@ -1,20 +1,40 @@
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+const {
+  SlashCommandBuilder,
+  EmbedBuilder
+} = require("discord.js");
+
 const FarmRegistro = require("../models/FarmRegistro");
 const getSemanaRP = require("../utils/semanaRP");
-const {
-  calcularMetaSemanal,
-  formatMoney,
-  formatDateBR
-} = require("../utils/metaSemanal");
+
+const META_SEMANAL = 100000;
+
+function formatMoney(value) {
+  return new Intl.NumberFormat("pt-BR").format(value || 0);
+}
+
+function calcularResumo(total) {
+  const valorFamilia = Math.min(total, META_SEMANAL);
+  const excedente = Math.max(total - META_SEMANAL, 0);
+  const valorLimpo = Math.floor(excedente * 0.5);
+  const faltante = Math.max(META_SEMANAL - total, 0);
+
+  return {
+    valorFamilia,
+    excedente,
+    valorLimpo,
+    faltante,
+    bateuMeta: total >= META_SEMANAL
+  };
+}
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("ver-metasemanal")
-    .setDescription("Ver a meta semanal de farm")
+    .setDescription("Mostra o resumo da meta semanal de farm")
     .addUserOption((option) =>
       option
         .setName("usuario")
-        .setDescription("Usuário para consultar a meta semanal")
+        .setDescription("Usuário para consultar")
         .setRequired(false)
     ),
 
@@ -25,59 +45,34 @@ module.exports = {
     const registros = await FarmRegistro.find({
       userId: usuario.id,
       semanaId: semana.semanaId
-    }).sort({ registradoEm: -1 });
+    });
 
-    const total = registros.reduce((acc, registro) => acc + (registro.valor || 0), 0);
-    const resumo = calcularMetaSemanal(total);
+    const total = registros.reduce((acc, item) => acc + (item.valor || 0), 0);
+    const resumo = calcularResumo(total);
 
     const embed = new EmbedBuilder()
-      .setColor(resumo.bateuMeta ? 0x57F287 : 0xFEE75C)
       .setTitle("📊 Meta semanal")
-      .setDescription(`Resumo semanal de <@${usuario.id}>`)
+      .setDescription(`Resumo semanal de ${usuario}`)
       .addFields(
-        {
-          name: "📅 Período da semana",
-          value: `Início: **${formatDateBR(semana.inicio)}**\nFim: **${formatDateBR(semana.fimExibicao)}**`,
-          inline: false
-        },
-        {
-          name: "💸 Total farmado",
-          value: `**${formatMoney(resumo.valorTotal)}**`,
-          inline: true
-        },
-        {
-          name: "🎯 Meta semanal",
-          value: `**${formatMoney(resumo.metaSemanal)}**`,
-          inline: true
-        },
-        {
-          name: "🏠 Vai para a família",
-          value: `**${formatMoney(resumo.valorFamilia)}**`,
-          inline: true
-        },
-        {
-          name: "📈 Excedente",
-          value: `**${formatMoney(resumo.excedente)}**`,
-          inline: true
-        },
-        {
-          name: "🧼 Valor limpo a receber",
-          value: `**${formatMoney(resumo.valorLimpo)}**`,
-          inline: true
-        },
+        { name: "🗓️ Semana", value: semana.semanaId, inline: false },
+        { name: "💰 Total farmado", value: `R$ ${formatMoney(total)}`, inline: true },
+        { name: "🎯 Meta semanal", value: `R$ ${formatMoney(META_SEMANAL)}`, inline: true },
+        { name: "🏴 Família recebe", value: `R$ ${formatMoney(resumo.valorFamilia)}`, inline: true },
+        { name: "📈 Excedente", value: `R$ ${formatMoney(resumo.excedente)}`, inline: true },
+        { name: "🧼 Limpo a receber", value: `R$ ${formatMoney(resumo.valorLimpo)}`, inline: true },
         {
           name: "✅ Status",
           value: resumo.bateuMeta
-            ? "Meta batida nesta semana."
-            : `Faltam **${formatMoney(resumo.faltante)}** para bater a meta.`,
+            ? "Meta batida com sucesso."
+            : `Faltam R$ ${formatMoney(resumo.faltante)} para bater a meta.`,
           inline: false
         }
       )
-      .setFooter({
-        text: `Semana ID: ${semana.semanaId} | Registros: ${registros.length}`
-      })
       .setTimestamp();
 
-    return interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({
+      embeds: [embed],
+      ephemeral: true
+    });
   }
 };
