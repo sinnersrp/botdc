@@ -12,8 +12,10 @@ const opcoesItens = [
   { name: "Attachs", value: "attachs" },
   { name: "Colete", value: "colete" },
   { name: "Algema", value: "algema" },
+  { name: "Dinheiro Sujo", value: "dinheiro sujo" },
   { name: "SUB", value: "sub" },
-  { name: "FiveSeven", value: "fiveseven" }
+  { name: "FiveSeven", value: "fiveseven" },
+  { name: "C4", value: "c4" }
 ];
 
 module.exports = {
@@ -81,5 +83,5 @@ module.exports = {
     return interaction.reply(
       `📤 ${quantidade}x ${item} retirado do baú da gerência.`
     );
-  }
+  },
 };
