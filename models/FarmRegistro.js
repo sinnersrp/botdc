@@ -1,10 +1,11 @@
 const mongoose = require("mongoose");
 
-const farmRegistroSchema = new mongoose.Schema(
+const FarmRegistroSchema = new mongoose.Schema(
   {
     userId: {
       type: String,
-      required: true
+      required: true,
+      index: true
     },
     username: {
       type: String,
@@ -12,48 +13,30 @@ const farmRegistroSchema = new mongoose.Schema(
     },
     cargo: {
       type: String,
-      enum: ["membro", "gerente", "lider"],
-      required: true
+      enum: ["membro", "gerente", "lider", "ajuste"],
+      default: "membro"
     },
     valor: {
       type: Number,
-      required: true,
-      min: 1
+      required: true
+    },
+    comprovante: {
+      type: String,
+      default: ""
     },
     semanaId: {
       type: String,
-      required: true
+      required: true,
+      index: true
     },
     registradoEm: {
       type: Date,
       default: Date.now
-    },
-    origem: {
-      type: String,
-      default: "bot"
-    },
-    observacao: {
-      type: String,
-      default: ""
-    },
-    comprovanteUrl: {
-      type: String,
-      default: ""
-    },
-    comprovanteNome: {
-      type: String,
-      default: ""
-    },
-    canalId: {
-      type: String,
-      default: ""
-    },
-    canalNome: {
-      type: String,
-      default: ""
     }
   },
-  { timestamps: true }
+  {
+    timestamps: true
+  }
 );
 
-module.exports = mongoose.model("FarmRegistro", farmRegistroSchema);
+module.exports = mongoose.model("FarmRegistro", FarmRegistroSchema);

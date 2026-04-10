@@ -247,7 +247,7 @@ async function confirmarAjusteFarm(interaction, client) {
   await FarmRegistro.create({
     userId: user.id,
     username: user.username,
-    cargo: "membro",
+    cargo: "ajuste",
     valor: valorFinal,
     comprovante: `AJUSTE MANUAL: ${dados.motivo}`,
     semanaId: dados.semanaId,
