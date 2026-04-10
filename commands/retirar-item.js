@@ -17,9 +17,13 @@ const opcoesItens = [
   { name: "Envelope", value: "envelope" },
   { name: "Lockpick", value: "lockpick" },
   { name: "Chip Ilegal", value: "chip ilegal" },
+  { name: "Adrenalina", value: "adrenalina" },
+  { name: "Bandagem", value: "bandagem" },
+  { name: "HHK Hacking", value: "hhk hacking" },
   { name: "SUB", value: "sub" },
   { name: "FiveSeven", value: "fiveseven" },
-  { name: "C4", value: "c4" }
+  { name: "C4", value: "c4" },
+  { name: "MP5", value: "mp5" }
 ];
 
 module.exports = {

@@ -38,9 +38,13 @@ const ITENS_LABEL = {
   envelope: "Envelope",
   lockpick: "Lockpick",
   "chip ilegal": "Chip Ilegal",
+  adrenalina: "Adrenalina",
+  bandagem: "Bandagem",
+  "hhk hacking": "HHK Hacking",
   sub: "SUB",
   fiveseven: "FiveSeven",
-  c4: "C4"
+  c4: "C4",
+  mp5: "MP5"
 };
 
 function getTipoItem(item) {

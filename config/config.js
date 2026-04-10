@@ -49,13 +49,17 @@ module.exports = {
     "algema",
     "envelope",
     "lockpick",
-    "chip ilegal"
+    "chip ilegal",
+    "adrenalina",
+    "bandagem",
+    "hhk hacking"
   ],
 
   itensArmas: [
     "sub",
     "fiveseven",
-    "c4"
+    "c4",
+    "mp5"
   ],
 
   todosItens: [
@@ -70,8 +74,12 @@ module.exports = {
     "envelope",
     "lockpick",
     "chip ilegal",
+    "adrenalina",
+    "bandagem",
+    "hhk hacking",
     "sub",
     "fiveseven",
-    "c4"
+    "c4",
+    "mp5"
   ]
 };
