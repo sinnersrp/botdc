@@ -42,8 +42,6 @@ module.exports = {
     "maconha",
     "metafetamina",
     "cocaina",
-    "muni pt",
-    "muni sub",
     "attachs",
     "colete",
     "algema",
@@ -52,12 +50,15 @@ module.exports = {
     "chip ilegal",
     "adrenalina",
     "bandagem",
-    "hhk hacking"
+    "hacking"
   ],
 
   itensArmas: [
+    "muni pt",
+    "muni sub",
     "sub",
     "fiveseven",
+    "hhk",
     "c4",
     "mp5"
   ],
@@ -66,8 +67,6 @@ module.exports = {
     "maconha",
     "metafetamina",
     "cocaina",
-    "muni pt",
-    "muni sub",
     "attachs",
     "colete",
     "algema",
@@ -76,9 +75,12 @@ module.exports = {
     "chip ilegal",
     "adrenalina",
     "bandagem",
-    "hhk hacking",
+    "hacking",
+    "muni pt",
+    "muni sub",
     "sub",
     "fiveseven",
+    "hhk",
     "c4",
     "mp5"
   ]

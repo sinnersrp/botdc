@@ -6,24 +6,25 @@ const { isGerenteOuLider } = require("../utils/permissoes");
 const logBau = require("../utils/logBau");
 
 const opcoesItens = [
-  { name: "Maconha", value: "maconha" },
-  { name: "Metafetamina", value: "metafetamina" },
-  { name: "Cocaína", value: "cocaina" },
-  { name: "Muni PT", value: "muni pt" },
-  { name: "Muni SUB", value: "muni sub" },
-  { name: "Attachs", value: "attachs" },
-  { name: "Colete", value: "colete" },
-  { name: "Algema", value: "algema" },
-  { name: "Envelope", value: "envelope" },
-  { name: "Lockpick", value: "lockpick" },
-  { name: "Chip Ilegal", value: "chip ilegal" },
-  { name: "Adrenalina", value: "adrenalina" },
-  { name: "Bandagem", value: "bandagem" },
-  { name: "HHK Hacking", value: "hhk hacking" },
-  { name: "SUB", value: "sub" },
-  { name: "FiveSeven", value: "fiveseven" },
-  { name: "C4", value: "c4" },
-  { name: "MP5", value: "mp5" }
+  { name: "📦 Maconha", value: "maconha" },
+  { name: "📦 Metafetamina", value: "metafetamina" },
+  { name: "📦 Cocaína", value: "cocaina" },
+  { name: "📦 Attachs", value: "attachs" },
+  { name: "📦 Colete", value: "colete" },
+  { name: "📦 Algema", value: "algema" },
+  { name: "📦 Envelope", value: "envelope" },
+  { name: "📦 Lockpick", value: "lockpick" },
+  { name: "📦 Chip Ilegal", value: "chip ilegal" },
+  { name: "📦 Adrenalina", value: "adrenalina" },
+  { name: "📦 Bandagem", value: "bandagem" },
+  { name: "📦 Hacking", value: "hacking" },
+  { name: "🔫 Muni PT", value: "muni pt" },
+  { name: "🔫 Muni SUB", value: "muni sub" },
+  { name: "🔫 SUB", value: "sub" },
+  { name: "🔫 FiveSeven", value: "fiveseven" },
+  { name: "🔫 HHK", value: "hhk" },
+  { name: "🔫 MP5", value: "mp5" },
+  { name: "🔫 C4", value: "c4" }
 ];
 
 function getTipoItem(item) {

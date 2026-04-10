@@ -27,24 +27,25 @@ const CONTROLE_SELECT_DEVOLVER = "controle_select_devolver";
 const CONTROLE_MODAL_PREFIX = "controle_modal";
 
 const ITENS_LABEL = {
-  maconha: "Maconha",
-  metafetamina: "Metafetamina",
-  cocaina: "Cocaína",
-  "muni pt": "Muni PT",
-  "muni sub": "Muni SUB",
-  attachs: "Attachs",
-  colete: "Colete",
-  algema: "Algema",
-  envelope: "Envelope",
-  lockpick: "Lockpick",
-  "chip ilegal": "Chip Ilegal",
-  adrenalina: "Adrenalina",
-  bandagem: "Bandagem",
-  "hhk hacking": "HHK Hacking",
-  sub: "SUB",
-  fiveseven: "FiveSeven",
-  c4: "C4",
-  mp5: "MP5"
+  maconha: "📦 Maconha",
+  metafetamina: "📦 Metafetamina",
+  cocaina: "📦 Cocaína",
+  attachs: "📦 Attachs",
+  colete: "📦 Colete",
+  algema: "📦 Algema",
+  envelope: "📦 Envelope",
+  lockpick: "📦 Lockpick",
+  "chip ilegal": "📦 Chip Ilegal",
+  adrenalina: "📦 Adrenalina",
+  bandagem: "📦 Bandagem",
+  hacking: "📦 Hacking",
+  "muni pt": "🔫 Muni PT",
+  "muni sub": "🔫 Muni SUB",
+  sub: "🔫 SUB",
+  fiveseven: "🔫 FiveSeven",
+  hhk: "🔫 HHK",
+  c4: "🔫 C4",
+  mp5: "🔫 MP5"
 };
 
 function getTipoItem(item) {
@@ -90,7 +91,9 @@ function criarPainelControleBau() {
       [
         "Use os botões abaixo para movimentar o controle de baú.",
         "",
-        "Agora você escolhe os produtos por **menu** e depois informa só as **quantidades**."
+        "Os menus agora estão separados visualmente entre:",
+        "🔫 **armas e munições**",
+        "📦 **produtos gerais**"
       ].join("\n")
     );
 
@@ -127,16 +130,21 @@ function criarPainelControleBau() {
 }
 
 function criarMenuSelecao(action) {
+  const itensOrdenados = [
+    ...itensArmas,
+    ...itensGerais
+  ];
+
   const menu = new StringSelectMenuBuilder()
     .setCustomId(getSelectCustomIdByAction(action))
     .setPlaceholder("Selecione até 3 produtos")
     .setMinValues(1)
     .setMaxValues(3)
     .addOptions(
-      todosItens.map((item) => ({
+      itensOrdenados.map((item) => ({
         label: formatarNomeItem(item),
         value: item,
-        description: `${getTipoItem(item) === "arma" ? "Arma" : "Geral"}`
+        description: `${getTipoItem(item) === "arma" ? "Arma / Munição" : "Produto Geral"}`
       }))
     );
 

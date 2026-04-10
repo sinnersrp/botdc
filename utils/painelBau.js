@@ -23,24 +23,25 @@ const BAU_SELECT_SAIDA = "bau_select_saida";
 const BAU_MODAL_PREFIX = "bau_modal";
 
 const ITENS_LABEL = {
-  maconha: "Maconha",
-  metafetamina: "Metafetamina",
-  cocaina: "Cocaína",
-  "muni pt": "Muni PT",
-  "muni sub": "Muni SUB",
-  attachs: "Attachs",
-  colete: "Colete",
-  algema: "Algema",
-  envelope: "Envelope",
-  lockpick: "Lockpick",
-  "chip ilegal": "Chip Ilegal",
-  adrenalina: "Adrenalina",
-  bandagem: "Bandagem",
-  "hhk hacking": "HHK Hacking",
-  sub: "SUB",
-  fiveseven: "FiveSeven",
-  c4: "C4",
-  mp5: "MP5"
+  maconha: "📦 Maconha",
+  metafetamina: "📦 Metafetamina",
+  cocaina: "📦 Cocaína",
+  attachs: "📦 Attachs",
+  colete: "📦 Colete",
+  algema: "📦 Algema",
+  envelope: "📦 Envelope",
+  lockpick: "📦 Lockpick",
+  "chip ilegal": "📦 Chip Ilegal",
+  adrenalina: "📦 Adrenalina",
+  bandagem: "📦 Bandagem",
+  hacking: "📦 Hacking",
+  "muni pt": "🔫 Muni PT",
+  "muni sub": "🔫 Muni SUB",
+  sub: "🔫 SUB",
+  fiveseven: "🔫 FiveSeven",
+  hhk: "🔫 HHK",
+  c4: "🔫 C4",
+  mp5: "🔫 MP5"
 };
 
 function getTipoItem(item) {
@@ -68,7 +69,9 @@ function criarPainelBau() {
       [
         "Use os botões abaixo para gerenciar o baú da gerência.",
         "",
-        "Agora você escolhe os produtos por **menu** e depois informa só as **quantidades**."
+        "Os menus agora estão separados visualmente entre:",
+        "🔫 **armas e munições**",
+        "📦 **produtos gerais**"
       ].join("\n")
     );
 
@@ -99,16 +102,21 @@ function criarPainelBau() {
 function criarMenuSelecao(action) {
   const customId = action === "entrada" ? BAU_SELECT_ENTRADA : BAU_SELECT_SAIDA;
 
+  const itensOrdenados = [
+    ...itensArmas,
+    ...itensGerais
+  ];
+
   const menu = new StringSelectMenuBuilder()
     .setCustomId(customId)
     .setPlaceholder("Selecione até 3 produtos")
     .setMinValues(1)
     .setMaxValues(3)
     .addOptions(
-      todosItens.map((item) => ({
+      itensOrdenados.map((item) => ({
         label: formatarNomeItem(item),
         value: item,
-        description: getTipoItem(item) === "arma" ? "Arma" : "Geral"
+        description: getTipoItem(item) === "arma" ? "Arma / Munição" : "Produto Geral"
       }))
     );
 
@@ -167,17 +175,11 @@ function lerQuantidadesModal(interaction, itens) {
 
 async function abrirSelecaoEntradaBau(interaction) {
   if (!isGerenteOuLider(interaction.member)) {
-    return interaction.reply({
-      content: "❌ Apenas gerência pode usar este painel.",
-      flags: 64
-    });
+    return interaction.reply({ content: "❌ Apenas gerência pode usar este painel.", flags: 64 });
   }
 
   if (interaction.channel.id !== canais.entradaBauGerencia) {
-    return interaction.reply({
-      content: "❌ Use este painel no canal de entrada do baú da gerência.",
-      flags: 64
-    });
+    return interaction.reply({ content: "❌ Use este painel no canal de entrada do baú da gerência.", flags: 64 });
   }
 
   return interaction.reply(criarMenuSelecao("entrada"));
@@ -185,17 +187,11 @@ async function abrirSelecaoEntradaBau(interaction) {
 
 async function abrirSelecaoSaidaBau(interaction) {
   if (!isGerenteOuLider(interaction.member)) {
-    return interaction.reply({
-      content: "❌ Apenas gerência pode usar este painel.",
-      flags: 64
-    });
+    return interaction.reply({ content: "❌ Apenas gerência pode usar este painel.", flags: 64 });
   }
 
   if (interaction.channel.id !== canais.saidaBauGerencia) {
-    return interaction.reply({
-      content: "❌ Use este painel no canal de saída do baú da gerência.",
-      flags: 64
-    });
+    return interaction.reply({ content: "❌ Use este painel no canal de saída do baú da gerência.", flags: 64 });
   }
 
   return interaction.reply(criarMenuSelecao("saida"));
@@ -212,10 +208,7 @@ async function processarSelecaoBauGerencia(interaction) {
   const itens = interaction.values;
 
   if (!itens.length) {
-    return interaction.reply({
-      content: "❌ Nenhum item selecionado.",
-      flags: 64
-    });
+    return interaction.reply({ content: "❌ Nenhum item selecionado.", flags: 64 });
   }
 
   const modal = criarModalQuantidades(action, itens);
@@ -227,18 +220,12 @@ async function processarModalBauGerencia(interaction) {
   const pares = lerQuantidadesModal(interaction, itens);
 
   if (!isGerenteOuLider(interaction.member)) {
-    return interaction.reply({
-      content: "❌ Apenas gerência pode usar este painel.",
-      flags: 64
-    });
+    return interaction.reply({ content: "❌ Apenas gerência pode usar este painel.", flags: 64 });
   }
 
   if (action === "entrada") {
     if (interaction.channel.id !== canais.entradaBauGerencia) {
-      return interaction.reply({
-        content: "❌ Use este formulário no canal de entrada do baú da gerência.",
-        flags: 64
-      });
+      return interaction.reply({ content: "❌ Use este formulário no canal de entrada do baú da gerência.", flags: 64 });
     }
 
     const resposta = [];
@@ -247,10 +234,7 @@ async function processarModalBauGerencia(interaction) {
       const tipo = getTipoItem(par.item);
 
       if (!tipo) {
-        return interaction.reply({
-          content: `❌ O item **${par.item}** é inválido.`,
-          flags: 64
-        });
+        return interaction.reply({ content: `❌ O item **${par.item}** é inválido.`, flags: 64 });
       }
 
       let estoque = await ControleBau.findOne({ item: `gerencia_${par.item}` });
@@ -277,10 +261,7 @@ async function processarModalBauGerencia(interaction) {
 
   if (action === "saida") {
     if (interaction.channel.id !== canais.saidaBauGerencia) {
-      return interaction.reply({
-        content: "❌ Use este formulário no canal de saída do baú da gerência.",
-        flags: 64
-      });
+      return interaction.reply({ content: "❌ Use este formulário no canal de saída do baú da gerência.", flags: 64 });
     }
 
     for (const par of pares) {
@@ -313,10 +294,7 @@ async function processarModalBauGerencia(interaction) {
 
 async function verEstoqueBauGerencia(interaction) {
   if (!isGerenteOuLider(interaction.member)) {
-    return interaction.reply({
-      content: "❌ Apenas gerência pode usar este painel.",
-      flags: 64
-    });
+    return interaction.reply({ content: "❌ Apenas gerência pode usar este painel.", flags: 64 });
   }
 
   const itens = await ControleBau.find({
@@ -324,10 +302,7 @@ async function verEstoqueBauGerencia(interaction) {
   }).sort({ item: 1 });
 
   if (!itens.length) {
-    return interaction.reply({
-      content: "📦 O baú da gerência está vazio.",
-      flags: 64
-    });
+    return interaction.reply({ content: "📦 O baú da gerência está vazio.", flags: 64 });
   }
 
   const linhas = itens.map((item) => {
