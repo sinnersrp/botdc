@@ -12,7 +12,8 @@ const {
 const {
   canais,
   cargosLiberacao,
-  cargoMembroPadrao
+  cargoMembroPadrao,
+  cargoAmigos
 } = require("../config/config");
 
 const REGISTRO_BUTTON_ID = "registro_abrir_modal";
@@ -70,9 +71,41 @@ async function buscarCanalFarmExistente(guild, userId) {
   }) || null;
 }
 
+async function restaurarCanalSeExistir(canal, member) {
+  const permissionOverwrites = [...canal.permissionOverwrites.cache.values()]
+    .map((overwrite) => ({
+      id: overwrite.id,
+      allow: overwrite.allow.bitfield.toString(),
+      deny: overwrite.deny.bitfield.toString()
+    }))
+    .filter((overwrite) => overwrite.id !== member.id);
+
+  permissionOverwrites.push({
+    id: member.id,
+    allow: [
+      PermissionFlagsBits.ViewChannel,
+      PermissionFlagsBits.SendMessages,
+      PermissionFlagsBits.ReadMessageHistory,
+      PermissionFlagsBits.AttachFiles,
+      PermissionFlagsBits.EmbedLinks
+    ]
+  });
+
+  let novoNome = canal.name;
+  if (novoNome.startsWith("arquivado-")) {
+    novoNome = novoNome.replace(/^arquivado-/, "");
+  }
+
+  await canal.edit({
+    name: novoNome.slice(0, 95),
+    permissionOverwrites
+  });
+}
+
 async function criarCanalFarm(guild, member, dados) {
   const nomeBase = limparNomeCanal(dados.nome || member.user.username || "membro");
   const passaporteBase = limparPassaporte(dados.passaporte || "sem-passaporte");
+
   const nomeCanal = `💸┃${nomeBase}┃${passaporteBase}`.slice(0, 95);
 
   const permissionOverwrites = [
@@ -203,10 +236,16 @@ async function processarModalRegistro(interaction) {
     cargoAdicionado = true;
   }
 
+  if (member.roles.cache.has(cargoAmigos)) {
+    await member.roles.remove(cargoAmigos).catch(() => null);
+  }
+
   let canalFarm = await buscarCanalFarmExistente(interaction.guild, member.id);
 
   if (!canalFarm) {
     canalFarm = await criarCanalFarm(interaction.guild, member, dados);
+  } else {
+    await restaurarCanalSeExistir(canalFarm, member);
   }
 
   await enviarConfirmacaoNoCanalPrivado(canalFarm, member, dados, cargoAdicionado);

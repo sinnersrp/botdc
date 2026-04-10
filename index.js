@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
 const fs = require("fs");
 const path = require("path");
 const { iniciarFarmScheduler } = require("./tasks/farmScheduler");
+const { processarSaidaOuRetorno } = require("./utils/saidaMembro");
 
 const {
   REGISTRO_BUTTON_ID,
@@ -43,6 +44,13 @@ const {
   verEstoqueControleBau
 } = require("./utils/painelControleBau");
 
+const {
+  FARM_BUTTON_REGISTRAR,
+  FARM_MODAL_REGISTRAR,
+  abrirModalFarm,
+  processarModalFarm
+} = require("./utils/painelFarm");
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -71,6 +79,14 @@ if (fs.existsSync(commandsPath)) {
 client.once("clientReady", async () => {
   console.log(`✅ Bot online como ${client.user.tag}`);
   iniciarFarmScheduler(client);
+});
+
+client.on("guildMemberUpdate", async (oldMember, newMember) => {
+  try {
+    await processarSaidaOuRetorno(oldMember, newMember);
+  } catch (error) {
+    console.error("❌ Erro no guildMemberUpdate:", error);
+  }
 });
 
 client.on("interactionCreate", async (interaction) => {
@@ -118,6 +134,11 @@ client.on("interactionCreate", async (interaction) => {
         return;
       }
 
+      if (interaction.customId === FARM_BUTTON_REGISTRAR) {
+        await abrirModalFarm(interaction);
+        return;
+      }
+
       return;
     }
 
@@ -159,6 +180,11 @@ client.on("interactionCreate", async (interaction) => {
 
       if (interaction.customId.startsWith(`${CONTROLE_MODAL_PREFIX}:`)) {
         await processarModalControleBau(interaction, client);
+        return;
+      }
+
+      if (interaction.customId === FARM_MODAL_REGISTRAR) {
+        await processarModalFarm(interaction, client);
         return;
       }
 

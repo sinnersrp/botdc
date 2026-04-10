@@ -12,6 +12,7 @@ module.exports = {
 
     testeBot: "1487959772870348870",
     log: "1480507568265760809",
+    logFarm: "1487959772870348870",
 
     metaSemanal: "1480507566302691413",
     categoriaFarmPrivado: "1480507566302691412",
@@ -35,6 +36,7 @@ module.exports = {
   ],
 
   cargoMembroPadrao: "1480507564189024262",
+  cargoAmigos: "1480507564189024259",
 
   itensGerais: [
     "maconha",
