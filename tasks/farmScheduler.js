@@ -3,11 +3,12 @@ const FarmRegistro = require("../models/FarmRegistro");
 const BotAgendaState = require("../models/BotAgendaState");
 const { canais, cargosLiberacao, cargosMembro } = require("../config/config");
 const getSemanaRP = require("../utils/semanaRP");
-const {
-  calcularMetaSemanal,
-  formatMoney,
-  formatDateBR
-} = require("../utils/metaSemanal");
+
+const META_SEMANAL = 100000;
+
+function formatMoney(value) {
+  return new Intl.NumberFormat("pt-BR").format(value || 0);
+}
 
 function getCargo(member) {
   if (cargosLiberacao.some((id) => member.roles.cache.has(id))) {
@@ -19,6 +20,21 @@ function getCargo(member) {
   }
 
   return null;
+}
+
+function calcularResumo(total) {
+  const valorFamilia = Math.min(total, META_SEMANAL);
+  const excedente = Math.max(total - META_SEMANAL, 0);
+  const valorLimpo = Math.floor(excedente * 0.5);
+  const faltante = Math.max(META_SEMANAL - total, 0);
+
+  return {
+    valorFamilia,
+    excedente,
+    valorLimpo,
+    faltante,
+    bateuMeta: total >= META_SEMANAL
+  };
 }
 
 async function jaFoiEnviado(key) {
@@ -78,8 +94,8 @@ async function enviarAviso24h(client) {
     "🚨 **AVISO DE FARM SEMANAL**",
     "",
     "Faltam **24 horas** para o fechamento do farm semanal.",
-    `⏰ **Prazo final:** ${formatDateBR(semana.fimExibicao)}`,
-    `🎯 **Meta individual:** ${formatMoney(100000)}`,
+    "⏰ **Prazo final:** sexta-feira às 21:59",
+    "🕙 **Nova semana começa:** sexta-feira às 22:00",
     "",
     `❌ **Pendentes até agora:** ${faltando.length}`
   ].join("\n");
@@ -101,8 +117,13 @@ async function enviarRelatorioFinal(client) {
   const canal = guild.channels.cache.get(canais.chatGerencia);
   if (!canal) return;
 
-  const referencia = new Date(Date.now() - 60 * 1000);
+  // Na sexta 22:00, a semana atual já virou.
+  // Então pegamos 1 minuto antes para buscar a semana que acabou.
+  const referencia = new Date();
+  referencia.setMinutes(referencia.getMinutes() - 1);
+
   const semana = getSemanaRP(referencia);
+
   const registros = await FarmRegistro.find({
     semanaId: semana.semanaId
   }).sort({ registradoEm: -1 });
@@ -134,14 +155,17 @@ async function enviarRelatorioFinal(client) {
     const registro = mapa.get(member.id);
 
     if (registro) {
-      const resumo = calcularMetaSemanal(registro.total);
-      entregaram.push([
-        `• ${member.displayName} | ${cargoDiscord}`,
-        `  Total: ${formatMoney(resumo.valorTotal)}`,
-        `  Família: ${formatMoney(resumo.valorFamilia)}`,
-        `  Excedente: ${formatMoney(resumo.excedente)}`,
-        `  Limpo a receber: ${formatMoney(resumo.valorLimpo)}`
-      ].join("\n"));
+      const resumo = calcularResumo(registro.total);
+
+      entregaram.push(
+        [
+          `• ${member.displayName} | ${cargoDiscord}`,
+          `  Total: ${formatMoney(registro.total)}`,
+          `  Família: ${formatMoney(resumo.valorFamilia)}`,
+          `  Excedente: ${formatMoney(resumo.excedente)}`,
+          `  Limpo: ${formatMoney(resumo.valorLimpo)}`
+        ].join("\n")
+      );
     } else {
       naoEntregaram.push(`• ${member.displayName} | ${cargoDiscord}`);
     }
@@ -151,7 +175,7 @@ async function enviarRelatorioFinal(client) {
     content: [
       "📋 **RELATÓRIO FINAL DO FARM SEMANAL**",
       "",
-      `📅 **Período:** ${formatDateBR(semana.inicio)} até ${formatDateBR(semana.fimExibicao)}`,
+      `🗓️ **Semana:** ${semana.semanaId}`,
       `✅ **Entregaram:** ${entregaram.length}`,
       `❌ **Não entregaram:** ${naoEntregaram.length}`
     ].join("\n")
@@ -168,7 +192,9 @@ async function enviarRelatorioFinal(client) {
       });
     }
   } else {
-    await canal.send({ content: "✅ **ENTREGARAM:**\nNinguém entregou nesta semana." });
+    await canal.send({
+      content: "✅ **ENTREGARAM:**\nNinguém entregou nesta semana."
+    });
   }
 
   if (naoEntregaram.length > 0) {
@@ -213,7 +239,9 @@ function iniciarFarmScheduler(client) {
     "0 22 * * 5",
     async () => {
       try {
-        const referencia = new Date(Date.now() - 60 * 1000);
+        const referencia = new Date();
+        referencia.setMinutes(referencia.getMinutes() - 1);
+
         const semana = getSemanaRP(referencia);
         const key = `farm-relatorio-${semana.semanaId}`;
 
