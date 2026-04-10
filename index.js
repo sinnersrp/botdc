@@ -30,15 +30,15 @@ const {
   CONTROLE_BUTTON_RETIRAR,
   CONTROLE_BUTTON_DEVOLVER,
   CONTROLE_BUTTON_VER,
-  CONTROLE_MODAL_LIBERAR,
-  CONTROLE_MODAL_RETIRAR,
-  CONTROLE_MODAL_DEVOLVER,
-  abrirModalLiberar,
-  abrirModalRetirar,
-  abrirModalDevolver,
-  processarModalLiberar,
-  processarModalRetirar,
-  processarModalDevolver,
+  CONTROLE_SELECT_LIBERAR,
+  CONTROLE_SELECT_RETIRAR,
+  CONTROLE_SELECT_DEVOLVER,
+  CONTROLE_MODAL_PREFIX,
+  abrirSelecaoLiberar,
+  abrirSelecaoRetirar,
+  abrirSelecaoDevolver,
+  processarModalControleBau,
+  processarSelecaoControleBau,
   verEstoqueControleBau
 } = require("./utils/painelControleBau");
 
@@ -98,22 +98,37 @@ client.on("interactionCreate", async (interaction) => {
       }
 
       if (interaction.customId === CONTROLE_BUTTON_LIBERAR) {
-        await abrirModalLiberar(interaction);
+        await abrirSelecaoLiberar(interaction);
         return;
       }
 
       if (interaction.customId === CONTROLE_BUTTON_RETIRAR) {
-        await abrirModalRetirar(interaction);
+        await abrirSelecaoRetirar(interaction);
         return;
       }
 
       if (interaction.customId === CONTROLE_BUTTON_DEVOLVER) {
-        await abrirModalDevolver(interaction);
+        await abrirSelecaoDevolver(interaction);
         return;
       }
 
       if (interaction.customId === CONTROLE_BUTTON_VER) {
         await verEstoqueControleBau(interaction);
+        return;
+      }
+
+      return;
+    }
+
+    if (interaction.isStringSelectMenu()) {
+      console.log(`📚 Menu selecionado: ${interaction.customId} por ${interaction.user.tag}`);
+
+      if (
+        interaction.customId === CONTROLE_SELECT_LIBERAR ||
+        interaction.customId === CONTROLE_SELECT_RETIRAR ||
+        interaction.customId === CONTROLE_SELECT_DEVOLVER
+      ) {
+        await processarSelecaoControleBau(interaction);
         return;
       }
 
@@ -138,18 +153,8 @@ client.on("interactionCreate", async (interaction) => {
         return;
       }
 
-      if (interaction.customId === CONTROLE_MODAL_LIBERAR) {
-        await processarModalLiberar(interaction, client);
-        return;
-      }
-
-      if (interaction.customId === CONTROLE_MODAL_RETIRAR) {
-        await processarModalRetirar(interaction, client);
-        return;
-      }
-
-      if (interaction.customId === CONTROLE_MODAL_DEVOLVER) {
-        await processarModalDevolver(interaction, client);
+      if (interaction.customId.startsWith(`${CONTROLE_MODAL_PREFIX}:`)) {
+        await processarModalControleBau(interaction, client);
         return;
       }
 

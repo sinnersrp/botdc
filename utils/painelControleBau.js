@@ -4,6 +4,7 @@ const {
   ButtonStyle,
   EmbedBuilder,
   ModalBuilder,
+  StringSelectMenuBuilder,
   TextInputBuilder,
   TextInputStyle
 } = require("discord.js");
@@ -19,9 +20,11 @@ const CONTROLE_BUTTON_RETIRAR = "controle_bau_retirar";
 const CONTROLE_BUTTON_DEVOLVER = "controle_bau_devolver";
 const CONTROLE_BUTTON_VER = "controle_bau_ver";
 
-const CONTROLE_MODAL_LIBERAR = "controle_modal_liberar";
-const CONTROLE_MODAL_RETIRAR = "controle_modal_retirar";
-const CONTROLE_MODAL_DEVOLVER = "controle_modal_devolver";
+const CONTROLE_SELECT_LIBERAR = "controle_select_liberar";
+const CONTROLE_SELECT_RETIRAR = "controle_select_retirar";
+const CONTROLE_SELECT_DEVOLVER = "controle_select_devolver";
+
+const CONTROLE_MODAL_PREFIX = "controle_modal";
 
 const ITENS_LABEL = {
   maconha: "Maconha",
@@ -48,6 +51,32 @@ function formatarNomeItem(item) {
   return ITENS_LABEL[item] || item;
 }
 
+function encodeItem(item) {
+  return item.replaceAll(" ", "~");
+}
+
+function decodeItem(item) {
+  return item.replaceAll("~", " ");
+}
+
+function getSelectCustomIdByAction(action) {
+  if (action === "liberar") return CONTROLE_SELECT_LIBERAR;
+  if (action === "retirar") return CONTROLE_SELECT_RETIRAR;
+  return CONTROLE_SELECT_DEVOLVER;
+}
+
+function getActionTitle(action) {
+  if (action === "liberar") return "Liberar item";
+  if (action === "retirar") return "Retirar item";
+  return "Devolver item";
+}
+
+function getActionEmoji(action) {
+  if (action === "liberar") return "✅";
+  if (action === "retirar") return "📤";
+  return "📥";
+}
+
 function criarPainelControleBau() {
   const embed = new EmbedBuilder()
     .setTitle("📦 Painel do Controle de Baú")
@@ -55,13 +84,7 @@ function criarPainelControleBau() {
       [
         "Use os botões abaixo para movimentar o controle de baú.",
         "",
-        "**Formato do formulário:**",
-        "`item | quantidade`",
-        "",
-        "**Exemplo:**",
-        "`maconha | 100`",
-        "`cocaina | 50`",
-        "`fiveseven | 10`"
+        "Agora você escolhe os produtos por **menu** e depois informa só as **quantidades**."
       ].join("\n")
     );
 
@@ -97,136 +120,193 @@ function criarPainelControleBau() {
   };
 }
 
-function criarModal(titulo, customId) {
+function criarMenuSelecao(action) {
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(getSelectCustomIdByAction(action))
+    .setPlaceholder("Selecione até 3 produtos")
+    .setMinValues(1)
+    .setMaxValues(3)
+    .addOptions(
+      todosItens.map((item) => ({
+        label: formatarNomeItem(item),
+        value: item,
+        description: `${getTipoItem(item) === "arma" ? "Arma" : "Geral"}`
+      }))
+    );
+
+  return {
+    content: `${getActionEmoji(action)} **${getActionTitle(action)}**\nSelecione até 3 produtos abaixo.`,
+    components: [new ActionRowBuilder().addComponents(menu)],
+    flags: 64
+  };
+}
+
+function criarModalQuantidades(action, itens) {
   const modal = new ModalBuilder()
-    .setCustomId(customId)
-    .setTitle(titulo);
+    .setCustomId(
+      `${CONTROLE_MODAL_PREFIX}:${action}:${itens.map(encodeItem).join(",")}`
+    )
+    .setTitle(`${getActionTitle(action)} no controle de baú`);
 
-  const linha1 = new TextInputBuilder()
-    .setCustomId("linha1")
-    .setLabel("Linha 1")
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder("maconha | 100")
-    .setRequired(true);
+  const rows = itens.map((item, index) => {
+    const input = new TextInputBuilder()
+      .setCustomId(`quantidade_${index + 1}`)
+      .setLabel(`${formatarNomeItem(item)}`)
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder("Digite a quantidade")
+      .setRequired(true)
+      .setMaxLength(10);
 
-  const linha2 = new TextInputBuilder()
-    .setCustomId("linha2")
-    .setLabel("Linha 2")
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder("cocaina | 50")
-    .setRequired(false);
+    return new ActionRowBuilder().addComponents(input);
+  });
 
-  const linha3 = new TextInputBuilder()
-    .setCustomId("linha3")
-    .setLabel("Linha 3")
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder("fiveseven | 10")
-    .setRequired(false);
-
-  modal.addComponents(
-    new ActionRowBuilder().addComponents(linha1),
-    new ActionRowBuilder().addComponents(linha2),
-    new ActionRowBuilder().addComponents(linha3)
-  );
-
+  modal.addComponents(...rows);
   return modal;
 }
 
-function parseLinha(linha) {
-  if (!linha || !linha.trim()) return null;
-
-  const partes = linha.split("|").map((p) => p.trim()).filter(Boolean);
-
-  if (partes.length !== 2) {
-    throw new Error(`Formato inválido em "${linha}". Use: item | quantidade`);
-  }
-
-  const item = partes[0].toLowerCase();
-  const quantidade = Number(partes[1]);
-
-  if (!todosItens.includes(item)) {
-    throw new Error(`Item inválido: ${item}`);
-  }
-
-  if (!Number.isInteger(quantidade) || quantidade <= 0) {
-    throw new Error(`Quantidade inválida para ${item}`);
-  }
-
-  return { item, quantidade };
+function parseModalInfo(customId) {
+  const [, action, rawItens] = customId.split(":");
+  const itens = rawItens.split(",").map(decodeItem);
+  return { action, itens };
 }
 
-function obterLinhasModal(interaction) {
-  const linhasRaw = [
-    interaction.fields.getTextInputValue("linha1"),
-    interaction.fields.getTextInputValue("linha2"),
-    interaction.fields.getTextInputValue("linha3")
-  ];
+function lerQuantidadesModal(interaction, itens) {
+  return itens.map((item, index) => {
+    const valor = interaction.fields
+      .getTextInputValue(`quantidade_${index + 1}`)
+      .trim();
 
-  const pares = linhasRaw.map(parseLinha).filter(Boolean);
+    const quantidade = Number(valor);
 
-  const itensUsados = new Set();
-  for (const par of pares) {
-    if (itensUsados.has(par.item)) {
-      throw new Error(`O item "${par.item}" foi repetido no mesmo formulário.`);
+    if (!Number.isInteger(quantidade) || quantidade <= 0) {
+      throw new Error(`Quantidade inválida para ${formatarNomeItem(item)}.`);
     }
-    itensUsados.add(par.item);
-  }
 
-  return pares;
+    return {
+      item,
+      quantidade
+    };
+  });
 }
 
-async function abrirModalLiberar(interaction) {
+async function abrirSelecaoLiberar(interaction) {
   if (!isGerenteOuLider(interaction.member)) {
-    return interaction.reply({ content: "❌ Apenas gerência pode usar este painel.", flags: 64 });
+    return interaction.reply({
+      content: "❌ Apenas gerência pode usar este painel.",
+      flags: 64
+    });
   }
 
   if (interaction.channel.id !== canais.entrada) {
-    return interaction.reply({ content: "❌ Use este painel no canal de entrada do controle de baú.", flags: 64 });
+    return interaction.reply({
+      content: "❌ Use este painel no canal de entrada do controle de baú.",
+      flags: 64
+    });
   }
 
-  await interaction.showModal(criarModal("Liberar item no controle de baú", CONTROLE_MODAL_LIBERAR));
+  return interaction.reply(criarMenuSelecao("liberar"));
 }
 
-async function abrirModalRetirar(interaction) {
+async function abrirSelecaoRetirar(interaction) {
   if (!isMembro(interaction.member)) {
-    return interaction.reply({ content: "❌ Você não tem permissão para retirar itens.", flags: 64 });
+    return interaction.reply({
+      content: "❌ Você não tem permissão para retirar itens.",
+      flags: 64
+    });
   }
 
   if (interaction.channel.id !== canais.saida) {
-    return interaction.reply({ content: "❌ Use este painel no canal de saída do controle de baú.", flags: 64 });
+    return interaction.reply({
+      content: "❌ Use este painel no canal de saída do controle de baú.",
+      flags: 64
+    });
   }
 
-  await interaction.showModal(criarModal("Retirar item do controle de baú", CONTROLE_MODAL_RETIRAR));
+  return interaction.reply(criarMenuSelecao("retirar"));
 }
 
-async function abrirModalDevolver(interaction) {
+async function abrirSelecaoDevolver(interaction) {
   if (!isMembro(interaction.member)) {
-    return interaction.reply({ content: "❌ Você não tem permissão para devolver itens.", flags: 64 });
+    return interaction.reply({
+      content: "❌ Você não tem permissão para devolver itens.",
+      flags: 64
+    });
   }
 
   if (interaction.channel.id !== canais.entrada) {
-    return interaction.reply({ content: "❌ Use este painel no canal de entrada do controle de baú.", flags: 64 });
+    return interaction.reply({
+      content: "❌ Use este painel no canal de entrada do controle de baú.",
+      flags: 64
+    });
   }
 
-  await interaction.showModal(criarModal("Devolver item ao controle de baú", CONTROLE_MODAL_DEVOLVER));
+  return interaction.reply(criarMenuSelecao("devolver"));
 }
 
-async function processarModalLiberar(interaction, client) {
+async function processarSelecaoControleBau(interaction) {
+  let action = null;
+
+  if (interaction.customId === CONTROLE_SELECT_LIBERAR) action = "liberar";
+  if (interaction.customId === CONTROLE_SELECT_RETIRAR) action = "retirar";
+  if (interaction.customId === CONTROLE_SELECT_DEVOLVER) action = "devolver";
+
+  if (!action) return;
+
+  const itens = interaction.values;
+
+  if (!itens.length) {
+    return interaction.reply({
+      content: "❌ Nenhum item selecionado.",
+      flags: 64
+    });
+  }
+
+  const modal = criarModalQuantidades(action, itens);
+  await interaction.showModal(modal);
+}
+
+async function processarModalControleBau(interaction, client) {
+  const { action, itens } = parseModalInfo(interaction.customId);
+  const pares = lerQuantidadesModal(interaction, itens);
+
+  if (action === "liberar") {
+    return processarModalLiberar(interaction, client, pares);
+  }
+
+  if (action === "retirar") {
+    return processarModalRetirar(interaction, client, pares);
+  }
+
+  if (action === "devolver") {
+    return processarModalDevolver(interaction, client, pares);
+  }
+}
+
+async function processarModalLiberar(interaction, client, pares) {
   if (!isGerenteOuLider(interaction.member)) {
-    return interaction.reply({ content: "❌ Apenas gerente ou líder pode liberar itens.", flags: 64 });
+    return interaction.reply({
+      content: "❌ Apenas gerente ou líder pode liberar itens.",
+      flags: 64
+    });
   }
 
   if (interaction.channel.id !== canais.entrada) {
-    return interaction.reply({ content: "❌ Use este formulário no canal de entrada do controle de baú.", flags: 64 });
+    return interaction.reply({
+      content: "❌ Use este formulário no canal de entrada do controle de baú.",
+      flags: 64
+    });
   }
 
-  const pares = obterLinhasModal(interaction);
   const respostas = [];
 
   for (const par of pares) {
     const tipo = getTipoItem(par.item);
+
     if (!tipo) {
-      return interaction.reply({ content: `❌ O item **${par.item}** é inválido.`, flags: 64 });
+      return interaction.reply({
+        content: `❌ O item **${par.item}** é inválido.`,
+        flags: 64
+      });
     }
 
     let registro = await ControleBau.findOne({ item: par.item });
@@ -274,16 +354,20 @@ async function processarModalLiberar(interaction, client) {
   });
 }
 
-async function processarModalRetirar(interaction, client) {
+async function processarModalRetirar(interaction, client, pares) {
   if (!isMembro(interaction.member)) {
-    return interaction.reply({ content: "❌ Você não tem permissão para retirar itens.", flags: 64 });
+    return interaction.reply({
+      content: "❌ Você não tem permissão para retirar itens.",
+      flags: 64
+    });
   }
 
   if (interaction.channel.id !== canais.saida) {
-    return interaction.reply({ content: "❌ Use este formulário no canal de saída do controle de baú.", flags: 64 });
+    return interaction.reply({
+      content: "❌ Use este formulário no canal de saída do controle de baú.",
+      flags: 64
+    });
   }
-
-  const pares = obterLinhasModal(interaction);
 
   for (const par of pares) {
     const estoque = await ControleBau.findOne({ item: par.item });
@@ -334,22 +418,31 @@ async function processarModalRetirar(interaction, client) {
   });
 }
 
-async function processarModalDevolver(interaction, client) {
+async function processarModalDevolver(interaction, client, pares) {
   if (!isMembro(interaction.member)) {
-    return interaction.reply({ content: "❌ Você não tem permissão para devolver itens.", flags: 64 });
+    return interaction.reply({
+      content: "❌ Você não tem permissão para devolver itens.",
+      flags: 64
+    });
   }
 
   if (interaction.channel.id !== canais.entrada) {
-    return interaction.reply({ content: "❌ Use este formulário no canal de entrada do controle de baú.", flags: 64 });
+    return interaction.reply({
+      content: "❌ Use este formulário no canal de entrada do controle de baú.",
+      flags: 64
+    });
   }
 
-  const pares = obterLinhasModal(interaction);
   const resposta = [];
 
   for (const par of pares) {
     const tipo = getTipoItem(par.item);
+
     if (!tipo) {
-      return interaction.reply({ content: `❌ O item **${par.item}** é inválido.`, flags: 64 });
+      return interaction.reply({
+        content: `❌ O item **${par.item}** é inválido.`,
+        flags: 64
+      });
     }
 
     let estoque = await ControleBau.findOne({ item: par.item });
@@ -422,15 +515,15 @@ module.exports = {
   CONTROLE_BUTTON_RETIRAR,
   CONTROLE_BUTTON_DEVOLVER,
   CONTROLE_BUTTON_VER,
-  CONTROLE_MODAL_LIBERAR,
-  CONTROLE_MODAL_RETIRAR,
-  CONTROLE_MODAL_DEVOLVER,
-  abrirModalLiberar,
-  abrirModalRetirar,
-  abrirModalDevolver,
+  CONTROLE_SELECT_LIBERAR,
+  CONTROLE_SELECT_RETIRAR,
+  CONTROLE_SELECT_DEVOLVER,
+  CONTROLE_MODAL_PREFIX,
+  abrirSelecaoLiberar,
+  abrirSelecaoRetirar,
+  abrirSelecaoDevolver,
   criarPainelControleBau,
-  processarModalLiberar,
-  processarModalRetirar,
-  processarModalDevolver,
+  processarModalControleBau,
+  processarSelecaoControleBau,
   verEstoqueControleBau
 };
