@@ -39,12 +39,14 @@ module.exports = {
     "muni sub",
     "attachs",
     "colete",
-    "algema"
+    "algema",
+    "dinheiro sujo"
   ],
 
   itensArmas: [
     "sub",
-    "fiveseven"
+    "fiveseven",
+    "c4"
   ],
 
   todosItens: [
@@ -56,7 +58,9 @@ module.exports = {
     "attachs",
     "colete",
     "algema",
+    "dinheiro sujo",
     "sub",
-    "fiveseven"
+    "fiveseven",
+    "c4"
   ]
 };
