@@ -4,12 +4,26 @@ const mongoose = require("mongoose");
 const fs = require("fs");
 const path = require("path");
 const { iniciarFarmScheduler } = require("./tasks/farmScheduler");
+
 const {
   REGISTRO_BUTTON_ID,
   REGISTRO_MODAL_ID,
   abrirModalRegistro,
   processarModalRegistro
 } = require("./utils/registroMembro");
+
+const {
+  BAU_BUTTON_ENTRADA,
+  BAU_BUTTON_SAIDA,
+  BAU_BUTTON_VER,
+  BAU_MODAL_ENTRADA,
+  BAU_MODAL_SAIDA,
+  abrirModalBauEntrada,
+  abrirModalBauSaida,
+  processarModalBauEntrada,
+  processarModalBauSaida,
+  verEstoqueBauGerencia
+} = require("./utils/painelBau");
 
 const client = new Client({
   intents: [
@@ -48,6 +62,22 @@ client.on("interactionCreate", async (interaction) => {
 
       if (interaction.customId === REGISTRO_BUTTON_ID) {
         await abrirModalRegistro(interaction);
+        return;
+      }
+
+      if (interaction.customId === BAU_BUTTON_ENTRADA) {
+        await abrirModalBauEntrada(interaction);
+        return;
+      }
+
+      if (interaction.customId === BAU_BUTTON_SAIDA) {
+        await abrirModalBauSaida(interaction);
+        return;
+      }
+
+      if (interaction.customId === BAU_BUTTON_VER) {
+        await verEstoqueBauGerencia(interaction);
+        return;
       }
 
       return;
@@ -58,6 +88,17 @@ client.on("interactionCreate", async (interaction) => {
 
       if (interaction.customId === REGISTRO_MODAL_ID) {
         await processarModalRegistro(interaction);
+        return;
+      }
+
+      if (interaction.customId === BAU_MODAL_ENTRADA) {
+        await processarModalBauEntrada(interaction);
+        return;
+      }
+
+      if (interaction.customId === BAU_MODAL_SAIDA) {
+        await processarModalBauSaida(interaction);
+        return;
       }
 
       return;
