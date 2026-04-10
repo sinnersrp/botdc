@@ -1,4 +1,10 @@
-const { SlashCommandBuilder } = require("discord.js");
+const {
+  SlashCommandBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder
+} = require("discord.js");
 const ControleBau = require("../models/ControleBau");
 const FarmRegistro = require("../models/FarmRegistro");
 const { itensGerais, itensArmas } = require("../config/config");
@@ -41,58 +47,20 @@ function formatMoney(value) {
   return new Intl.NumberFormat("pt-BR").format(Number(value) || 0);
 }
 
-async function ajustarFarm(interaction, client) {
-  const usuario = interaction.options.getUser("usuario", true);
-  const acao = interaction.options.getString("acao", true);
-  const valor = interaction.options.getInteger("valor", true);
-  const motivo = interaction.options.getString("motivo", true);
+function buildFarmConfirmCustomId({ userId, acao, valor, motivo, semanaId }) {
+  const motivoSeguro = encodeURIComponent(motivo).slice(0, 70);
+  return `ajusteFarm:${userId}:${acao}:${valor}:${semanaId}:${motivoSeguro}`;
+}
 
-  if (valor <= 0) {
-    return interaction.reply({
-      content: "❌ O valor precisa ser maior que zero.",
-      flags: 64
-    });
-  }
-
-  const semana = getSemanaRP();
-  const valorFinal = acao === "remover" ? -Math.abs(valor) : Math.abs(valor);
-
-  await FarmRegistro.create({
-    userId: usuario.id,
-    username: usuario.username,
-    cargo: "membro",
-    valor: valorFinal,
-    comprovante: `AJUSTE MANUAL: ${motivo}`,
-    semanaId: semana.semanaId,
-    registradoEm: new Date()
-  });
-
-  const registros = await FarmRegistro.find({
-    userId: usuario.id,
-    semanaId: semana.semanaId
-  });
-
-  const totalSemana = registros.reduce((acc, item) => acc + (Number(item.valor) || 0), 0);
-
-  await logAjuste(client, {
-    tipo: "Ajuste de farm",
-    responsavel: interaction.user.tag,
-    alvo: `${usuario.username} (${usuario.id})`,
+function parseFarmConfirmCustomId(customId) {
+  const [, userId, acao, valor, semanaId, motivoSeguro] = customId.split(":");
+  return {
+    userId,
     acao,
-    valor: Math.abs(valor),
-    motivo
-  });
-
-  return interaction.reply({
-    content: [
-      "✅ Ajuste de farm realizado.",
-      `👤 Usuário: **${usuario.username}**`,
-      `⚙️ Ação: **${acao}**`,
-      `💰 Valor ajustado: **${formatMoney(Math.abs(valor))}**`,
-      `📊 Total atual da semana: **${formatMoney(totalSemana)}**`
-    ].join("\n"),
-    flags: 64
-  });
+    valor: Number(valor),
+    semanaId,
+    motivo: decodeURIComponent(motivoSeguro || "")
+  };
 }
 
 async function ajustarEstoque(interaction, client) {
@@ -169,11 +137,156 @@ async function ajustarEstoque(interaction, client) {
   });
 }
 
+async function prepararAjusteFarm(interaction) {
+  const usuario = interaction.options.getUser("usuario", true);
+  const acao = interaction.options.getString("acao", true);
+  const valor = interaction.options.getInteger("valor", true);
+  const motivo = interaction.options.getString("motivo", true);
+
+  if (valor <= 0) {
+    return interaction.reply({
+      content: "❌ O valor precisa ser maior que zero.",
+      flags: 64
+    });
+  }
+
+  const semana = getSemanaRP();
+
+  const registros = await FarmRegistro.find({
+    userId: usuario.id,
+    semanaId: semana.semanaId
+  });
+
+  const totalAtual = registros.reduce((acc, item) => acc + (Number(item.valor) || 0), 0);
+  const totalDepois = acao === "remover"
+    ? totalAtual - valor
+    : totalAtual + valor;
+
+  const embed = new EmbedBuilder()
+    .setColor(0xf1c40f)
+    .setTitle("🛠️ Confirmar ajuste de farm")
+    .addFields(
+      {
+        name: "👤 Membro",
+        value: `${usuario}\n**${usuario.username}**`,
+        inline: false
+      },
+      {
+        name: "📊 Total atual",
+        value: `**${formatMoney(totalAtual)}**`,
+        inline: true
+      },
+      {
+        name: "⚙️ Ação",
+        value: `**${acao}**`,
+        inline: true
+      },
+      {
+        name: "💰 Valor do ajuste",
+        value: `**${formatMoney(valor)}**`,
+        inline: true
+      },
+      {
+        name: "📈 Total após ajuste",
+        value: `**${formatMoney(totalDepois)}**`,
+        inline: true
+      },
+      {
+        name: "📝 Motivo",
+        value: `**${motivo}**`,
+        inline: false
+      }
+    )
+    .setFooter({
+      text: "SINNERS BOT • Confirmação de ajuste"
+    })
+    .setTimestamp();
+
+  const confirmId = buildFarmConfirmCustomId({
+    userId: usuario.id,
+    acao,
+    valor,
+    motivo,
+    semanaId: semana.semanaId
+  });
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(confirmId)
+      .setLabel("Confirmar ajuste")
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId("ajusteFarmCancelar")
+      .setLabel("Cancelar")
+      .setStyle(ButtonStyle.Danger)
+  );
+
+  return interaction.reply({
+    embeds: [embed],
+    components: [row],
+    flags: 64
+  });
+}
+
+async function confirmarAjusteFarm(interaction, client) {
+  const dados = parseFarmConfirmCustomId(interaction.customId);
+
+  const user = await client.users.fetch(dados.userId).catch(() => null);
+  if (!user) {
+    return interaction.update({
+      content: "❌ Não foi possível encontrar o usuário desse ajuste.",
+      embeds: [],
+      components: []
+    });
+  }
+
+  const valorFinal = dados.acao === "remover"
+    ? -Math.abs(dados.valor)
+    : Math.abs(dados.valor);
+
+  await FarmRegistro.create({
+    userId: user.id,
+    username: user.username,
+    cargo: "membro",
+    valor: valorFinal,
+    comprovante: `AJUSTE MANUAL: ${dados.motivo}`,
+    semanaId: dados.semanaId,
+    registradoEm: new Date()
+  });
+
+  const registros = await FarmRegistro.find({
+    userId: user.id,
+    semanaId: dados.semanaId
+  });
+
+  const totalSemana = registros.reduce((acc, item) => acc + (Number(item.valor) || 0), 0);
+
+  await logAjuste(client, {
+    tipo: "Ajuste de farm",
+    responsavel: interaction.user.tag,
+    alvo: `${user.username} (${user.id})`,
+    acao: dados.acao,
+    valor: Math.abs(dados.valor),
+    motivo: dados.motivo
+  });
+
+  return interaction.update({
+    content: [
+      "✅ Ajuste de farm confirmado.",
+      `👤 Usuário: **${user.username}**`,
+      `⚙️ Ação: **${dados.acao}**`,
+      `💰 Valor ajustado: **${formatMoney(Math.abs(dados.valor))}**`,
+      `📊 Total atual da semana: **${formatMoney(totalSemana)}**`
+    ].join("\n"),
+    embeds: [],
+    components: []
+  });
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("ajuste-gerencia")
     .setDescription("Ajustes manuais da gerência")
-
     .addSubcommand(subcommand =>
       subcommand
         .setName("farm")
@@ -198,7 +311,6 @@ module.exports = {
           option.setName("motivo").setDescription("Motivo do ajuste").setRequired(true)
         )
     )
-
     .addSubcommand(subcommand =>
       subcommand
         .setName("estoque")
@@ -250,7 +362,7 @@ module.exports = {
     const subcommand = interaction.options.getSubcommand();
 
     if (subcommand === "farm") {
-      return ajustarFarm(interaction, client);
+      return prepararAjusteFarm(interaction);
     }
 
     if (subcommand === "estoque") {
@@ -261,5 +373,7 @@ module.exports = {
       content: "❌ Subcomando inválido.",
       flags: 64
     });
-  }
+  },
+
+  confirmarAjusteFarm
 };

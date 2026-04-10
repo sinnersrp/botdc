@@ -52,6 +52,8 @@ const {
   processarModalFarm
 } = require("./utils/painelFarm");
 
+const ajusteGerenciaCommand = require("./commands/ajuste-gerencia");
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -145,6 +147,20 @@ client.on("interactionCreate", async (interaction) => {
 
       if (interaction.customId === FARM_BUTTON_REGISTRAR) {
         await abrirModalFarm(interaction);
+        return;
+      }
+
+      if (interaction.customId === "ajusteFarmCancelar") {
+        await interaction.update({
+          content: "❌ Ajuste cancelado.",
+          embeds: [],
+          components: []
+        });
+        return;
+      }
+
+      if (interaction.customId.startsWith("ajusteFarm:")) {
+        await ajusteGerenciaCommand.confirmarAjusteFarm(interaction, client);
         return;
       }
 
