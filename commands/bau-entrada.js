@@ -1,66 +1,71 @@
-const { SlashCommandBuilder } = require("discord.js");
-const ControleBau = require("../models/ControleBau");
-const { canais } = require("../config/config");
-const { isGerenteOuLider } = require("../utils/permissoes");
-
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("bau-entrada")
-    .setDescription("Adicionar item no baú da gerência")
-    .addStringOption((option) =>
-      option
-        .setName("item")
-        .setDescription("Nome do item")
-        .setRequired(true)
-    )
-    .addIntegerOption((option) =>
-      option
-        .setName("quantidade")
-        .setDescription("Quantidade do item")
-        .setRequired(true)
-    ),
+  canais: {
+    registro: "1480507565770018849",
 
-  async execute(interaction) {
-    if (!isGerenteOuLider(interaction.member)) {
-      return interaction.reply({
-        content: "❌ Apenas gerência pode usar este comando.",
-        ephemeral: true,
-      });
-    }
+    entrada: "1480507568265760812",
+    saida: "1480507568265760814",
+    entradaArma: "1480507568265760812",
+    saidaArma: "1480507568265760814",
 
-    if (interaction.channel.id !== canais.entradaBauGerencia) {
-      return interaction.reply({
-        content: "❌ Use este comando no canal entrada-bau da gerência.",
-        ephemeral: true,
-      });
-    }
+    entradaBauGerencia: "1486811209565995169",
+    saidaBauGerencia: "1486811278281408512",
 
-    const item = interaction.options.getString("item").toLowerCase().trim();
-    const quantidade = interaction.options.getInteger("quantidade");
+    testeBot: "1487959772870348870",
+    log: "1480507568265760809",
 
-    if (quantidade <= 0) {
-      return interaction.reply({
-        content: "❌ A quantidade precisa ser maior que 0.",
-        ephemeral: true,
-      });
-    }
-
-    let estoque = await ControleBau.findOne({ item: `gerencia_${item}` });
-
-    if (!estoque) {
-      estoque = new ControleBau({
-        item: `gerencia_${item}`,
-        quantidade: quantidade,
-        tipo: "geral",
-      });
-    } else {
-      estoque.quantidade += quantidade;
-    }
-
-    await estoque.save();
-
-    return interaction.reply(
-      `✅ ${quantidade}x ${item} adicionado no baú da gerência.`
-    );
+    metaSemanal: "1480507566302691413",
+    categoriaFarmPrivado: "1480507566302691412",
+    chatGerencia: "1480507567913304101"
   },
+
+  cargosLiberacao: [
+    "1480507564251942969",
+    "1480507564251942968",
+    "1480507564251942967",
+    "1480507564251942966",
+    "1480507564251942964",
+    "1480507564251942963",
+    "1480507564189024266"
+  ],
+
+  cargosMembro: [
+    "1480507564189024262",
+    "1488281802446733382",
+    "1480507564189024264"
+  ],
+
+  cargoMembroPadrao: "1480507564189024262",
+
+  itensGerais: [
+    "maconha",
+    "metafetamina",
+    "cocaina",
+    "muni pt",
+    "muni sub",
+    "attachs",
+    "colete",
+    "algema",
+    "dinheiro sujo"
+  ],
+
+  itensArmas: [
+    "sub",
+    "fiveseven",
+    "c4"
+  ],
+
+  todosItens: [
+    "maconha",
+    "metafetamina",
+    "cocaina",
+    "muni pt",
+    "muni sub",
+    "attachs",
+    "colete",
+    "algema",
+    "dinheiro sujo",
+    "sub",
+    "fiveseven",
+    "c4"
+  ]
 };

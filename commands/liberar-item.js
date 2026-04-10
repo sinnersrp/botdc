@@ -31,101 +31,49 @@ module.exports = {
     .setName("liberar-item")
     .setDescription("Libera até 3 itens no controle de baú")
     .addStringOption(option =>
-      option
-        .setName("item1")
-        .setDescription("Primeiro item")
-        .setRequired(true)
-        .addChoices(...opcoesItens)
+      option.setName("item1").setDescription("Primeiro item").setRequired(true).addChoices(...opcoesItens)
     )
     .addIntegerOption(option =>
-      option
-        .setName("quantidade1")
-        .setDescription("Quantidade do primeiro item")
-        .setRequired(true)
-        .setMinValue(1)
+      option.setName("quantidade1").setDescription("Quantidade do primeiro item").setRequired(true).setMinValue(1)
     )
     .addStringOption(option =>
-      option
-        .setName("item2")
-        .setDescription("Segundo item")
-        .setRequired(false)
-        .addChoices(...opcoesItens)
+      option.setName("item2").setDescription("Segundo item").setRequired(false).addChoices(...opcoesItens)
     )
     .addIntegerOption(option =>
-      option
-        .setName("quantidade2")
-        .setDescription("Quantidade do segundo item")
-        .setRequired(false)
-        .setMinValue(1)
+      option.setName("quantidade2").setDescription("Quantidade do segundo item").setRequired(false).setMinValue(1)
     )
     .addStringOption(option =>
-      option
-        .setName("item3")
-        .setDescription("Terceiro item")
-        .setRequired(false)
-        .addChoices(...opcoesItens)
+      option.setName("item3").setDescription("Terceiro item").setRequired(false).addChoices(...opcoesItens)
     )
     .addIntegerOption(option =>
-      option
-        .setName("quantidade3")
-        .setDescription("Quantidade do terceiro item")
-        .setRequired(false)
-        .setMinValue(1)
+      option.setName("quantidade3").setDescription("Quantidade do terceiro item").setRequired(false).setMinValue(1)
     ),
 
   async execute(interaction, client) {
     if (!isGerenteOuLider(interaction.member)) {
-      return interaction.reply({
-        content: "❌ Apenas gerente ou líder pode liberar itens.",
-        ephemeral: true
-      });
+      return interaction.reply({ content: "❌ Apenas gerente ou líder pode liberar itens.", flags: 64 });
     }
 
     if (interaction.channel.id !== canais.entrada) {
-      return interaction.reply({
-        content: "❌ Use no canal de entrada do controle de baú.",
-        ephemeral: true
-      });
+      return interaction.reply({ content: "❌ Use no canal de entrada do controle de baú.", flags: 64 });
     }
 
     const pares = [
-      {
-        item: interaction.options.getString("item1"),
-        quantidade: interaction.options.getInteger("quantidade1")
-      },
-      {
-        item: interaction.options.getString("item2"),
-        quantidade: interaction.options.getInteger("quantidade2")
-      },
-      {
-        item: interaction.options.getString("item3"),
-        quantidade: interaction.options.getInteger("quantidade3")
-      }
+      { item: interaction.options.getString("item1"), quantidade: interaction.options.getInteger("quantidade1") },
+      { item: interaction.options.getString("item2"), quantidade: interaction.options.getInteger("quantidade2") },
+      { item: interaction.options.getString("item3"), quantidade: interaction.options.getInteger("quantidade3") }
     ].filter(p => p.item && p.quantidade);
-
-    if (!pares.length) {
-      return interaction.reply({
-        content: "❌ Informe pelo menos um item com quantidade.",
-        ephemeral: true
-      });
-    }
 
     const itensDuplicados = new Set();
     for (const par of pares) {
       if (itensDuplicados.has(par.item)) {
-        return interaction.reply({
-          content: `❌ O item **${par.item}** foi repetido no mesmo comando.`,
-          ephemeral: true
-        });
+        return interaction.reply({ content: `❌ O item **${par.item}** foi repetido no mesmo comando.`, flags: 64 });
       }
       itensDuplicados.add(par.item);
 
       const tipo = getTipoItem(par.item);
       if (!tipo) {
-        return interaction.reply({
-          content: `❌ O item **${par.item}** é inválido.`,
-          ephemeral: true
-        });
+        return interaction.reply({ content: `❌ O item **${par.item}** é inválido.`, flags: 64 });
       }
     }
 
@@ -133,7 +81,6 @@ module.exports = {
 
     for (const par of pares) {
       const tipo = getTipoItem(par.item);
-
       let registro = await ControleBau.findOne({ item: par.item });
 
       if (!registro) {
@@ -174,7 +121,8 @@ module.exports = {
     }
 
     return interaction.reply({
-      content: `✅ Itens liberados no controle de baú:\n${respostas.join("\n")}`
+      content: `✅ Itens liberados no controle de baú:\n${respostas.join("\n")}`,
+      flags: 64
     });
   }
 };
