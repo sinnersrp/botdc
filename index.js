@@ -48,6 +48,7 @@ const {
   FARM_BUTTON_REGISTRAR,
   FARM_MODAL_REGISTRAR,
   abrirModalFarm,
+  processarMensagemComprovanteFarm,
   processarModalFarm
 } = require("./utils/painelFarm");
 
@@ -86,6 +87,14 @@ client.on("guildMemberUpdate", async (oldMember, newMember) => {
     await processarSaidaOuRetorno(oldMember, newMember);
   } catch (error) {
     console.error("❌ Erro no guildMemberUpdate:", error);
+  }
+});
+
+client.on("messageCreate", async (message) => {
+  try {
+    await processarMensagemComprovanteFarm(message, client);
+  } catch (error) {
+    console.error("❌ Erro no messageCreate:", error);
   }
 });
 
@@ -184,7 +193,7 @@ client.on("interactionCreate", async (interaction) => {
       }
 
       if (interaction.customId === FARM_MODAL_REGISTRAR) {
-        await processarModalFarm(interaction, client);
+        await processarModalFarm(interaction);
         return;
       }
 

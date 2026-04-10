@@ -9,6 +9,7 @@ const {
 } = require("discord.js");
 
 const FarmRegistro = require("../models/FarmRegistro");
+const FarmPendente = require("../models/FarmPendente");
 const getSemanaRP = require("./semanaRP");
 const logFarm = require("./logFarm");
 
@@ -26,9 +27,9 @@ function criarPainelFarm() {
       [
         "Use o botão abaixo para registrar seu farm semanal.",
         "",
-        "Você poderá informar:",
-        "• Valor do farm",
-        "• Comprovante (link opcional)"
+        "Fluxo:",
+        "• informar o valor",
+        "• depois enviar a foto do comprovante neste canal"
       ].join("\n")
     );
 
@@ -59,17 +60,8 @@ function criarModalFarm() {
     .setRequired(true)
     .setMaxLength(20);
 
-  const comprovanteInput = new TextInputBuilder()
-    .setCustomId("comprovante")
-    .setLabel("Comprovante (link opcional)")
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder("https://...")
-    .setRequired(false)
-    .setMaxLength(300);
-
   modal.addComponents(
-    new ActionRowBuilder().addComponents(valorInput),
-    new ActionRowBuilder().addComponents(comprovanteInput)
+    new ActionRowBuilder().addComponents(valorInput)
   );
 
   return modal;
@@ -79,10 +71,8 @@ async function abrirModalFarm(interaction) {
   await interaction.showModal(criarModalFarm());
 }
 
-async function processarModalFarm(interaction, client) {
+async function processarModalFarm(interaction) {
   const valorTexto = interaction.fields.getTextInputValue("valor").trim();
-  const comprovante = interaction.fields.getTextInputValue("comprovante").trim();
-
   const valor = Number(valorTexto.replace(/\./g, "").replace(",", "."));
 
   if (!Number.isFinite(valor) || valor <= 0) {
@@ -93,42 +83,109 @@ async function processarModalFarm(interaction, client) {
   }
 
   const semana = getSemanaRP();
+  const expiraEm = new Date(Date.now() + 10 * 60 * 1000);
 
-  await FarmRegistro.create({
-    userId: interaction.user.id,
-    username: interaction.user.username,
-    cargo: "Membro",
-    valor,
-    comprovante,
-    semanaId: semana.semanaId,
-    registradoEm: new Date()
-  });
-
-  const registros = await FarmRegistro.find({
-    userId: interaction.user.id,
-    semanaId: semana.semanaId
-  });
-
-  const totalSemana = registros.reduce((acc, item) => acc + (Number(item.valor) || 0), 0);
-
-  await logFarm(client, {
-    username: interaction.user.username,
-    userId: interaction.user.id,
-    valor,
-    totalSemana,
-    semanaId: semana.semanaId,
-    comprovante,
-    canalNome: interaction.channel.name
-  });
+  await FarmPendente.findOneAndUpdate(
+    { userId: interaction.user.id },
+    {
+      userId: interaction.user.id,
+      username: interaction.user.username,
+      valor,
+      semanaId: semana.semanaId,
+      canalId: interaction.channel.id,
+      criadoEm: new Date(),
+      expiraEm
+    },
+    {
+      upsert: true,
+      new: true
+    }
+  );
 
   return interaction.reply({
     content: [
-      "✅ Farm registrado com sucesso.",
-      `💰 Valor enviado: **${formatMoney(valor)}**`,
-      `📊 Total da semana: **${formatMoney(totalSemana)}**`
+      "✅ Valor recebido.",
+      `💰 Valor informado: **${formatMoney(valor)}**`,
+      "📸 Agora envie a **foto do comprovante neste canal** em até 10 minutos."
     ].join("\n"),
     flags: 64
   });
+}
+
+async function processarMensagemComprovanteFarm(message, client) {
+  try {
+    if (!message.guild) return;
+    if (message.author.bot) return;
+
+    const pendente = await FarmPendente.findOne({
+      userId: message.author.id
+    });
+
+    if (!pendente) return;
+
+    if (pendente.canalId !== message.channel.id) {
+      return;
+    }
+
+    if (new Date() > new Date(pendente.expiraEm)) {
+      await FarmPendente.deleteOne({ _id: pendente._id });
+
+      await message.reply(
+        "⏰ Seu registro de farm expirou. Clique no botão novamente e refaça o processo."
+      );
+
+      return;
+    }
+
+    const anexo = message.attachments.find((attachment) => {
+      const contentType = attachment.contentType || "";
+      return contentType.startsWith("image/");
+    });
+
+    if (!anexo) {
+      await message.reply("❌ Envie uma **imagem** como comprovante do farm.");
+      return;
+    }
+
+    await FarmRegistro.create({
+      userId: pendente.userId,
+      username: pendente.username,
+      cargo: "Membro",
+      valor: pendente.valor,
+      comprovante: anexo.url,
+      semanaId: pendente.semanaId,
+      registradoEm: new Date()
+    });
+
+    const registros = await FarmRegistro.find({
+      userId: pendente.userId,
+      semanaId: pendente.semanaId
+    });
+
+    const totalSemana = registros.reduce((acc, item) => acc + (Number(item.valor) || 0), 0);
+
+    await logFarm(client, {
+      username: pendente.username,
+      userId: pendente.userId,
+      valor: pendente.valor,
+      totalSemana,
+      semanaId: pendente.semanaId,
+      comprovante: anexo.url,
+      canalNome: message.channel.name
+    });
+
+    await FarmPendente.deleteOne({ _id: pendente._id });
+
+    await message.reply(
+      [
+        "✅ Farm registrado com sucesso.",
+        `💰 Valor enviado: **${formatMoney(pendente.valor)}**`,
+        `📊 Total da semana: **${formatMoney(totalSemana)}**`
+      ].join("\n")
+    );
+  } catch (error) {
+    console.error("Erro ao processar comprovante de farm:", error);
+  }
 }
 
 module.exports = {
@@ -136,5 +193,6 @@ module.exports = {
   FARM_MODAL_REGISTRAR,
   abrirModalFarm,
   criarPainelFarm,
+  processarMensagemComprovanteFarm,
   processarModalFarm
 };

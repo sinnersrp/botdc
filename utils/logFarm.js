@@ -85,12 +85,7 @@ async function logFarm(client, dados = {}) {
         inline: false
       });
 
-      if (
-        comprovante.startsWith("http://") ||
-        comprovante.startsWith("https://")
-      ) {
-        embed.setImage(comprovante);
-      }
+      embed.setImage(comprovante);
     }
 
     await canal.send({ embeds: [embed] });
