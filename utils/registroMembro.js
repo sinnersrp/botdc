@@ -1,6 +1,12 @@
 const {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   ChannelType,
-  PermissionFlagsBits
+  ModalBuilder,
+  PermissionFlagsBits,
+  TextInputBuilder,
+  TextInputStyle
 } = require("discord.js");
 
 const {
@@ -8,6 +14,9 @@ const {
   cargosLiberacao,
   cargoMembroPadrao
 } = require("../config/config");
+
+const REGISTRO_BUTTON_ID = "registro_abrir_modal";
+const REGISTRO_MODAL_ID = "registro_modal";
 
 function normalizarTexto(texto = "") {
   return texto
@@ -32,24 +41,25 @@ function limparPassaporte(passaporte = "") {
     .slice(0, 20);
 }
 
-function extrairCampo(regex, texto) {
-  const match = texto.match(regex);
-  return match ? match[1].trim() : null;
-}
+function criarPainelRegistro() {
+  const botao = new ButtonBuilder()
+    .setCustomId(REGISTRO_BUTTON_ID)
+    .setLabel("Fazer registro")
+    .setStyle(ButtonStyle.Primary);
 
-function extrairDadosRegistro(conteudo) {
-  const nome = extrairCampo(/nome\s*:\s*(.+)/i, conteudo);
-  const passaporte = extrairCampo(/passaporte\s*:\s*(.+)/i, conteudo);
-  const numeroGame = extrairCampo(/numero\s*em\s*game\s*:\s*(.+)/i, conteudo);
-
-  if (!nome || !passaporte) {
-    return null;
-  }
+  const row = new ActionRowBuilder().addComponents(botao);
 
   return {
-    nome,
-    passaporte,
-    numeroGame: numeroGame || ""
+    content: [
+      "📋 **REGISTRO DE NOVO MEMBRO**",
+      "",
+      "Clique no botão abaixo para preencher seu registro.",
+      "Preencha corretamente:",
+      "• Nome",
+      "• Passaporte",
+      "• Número em game"
+    ].join("\n"),
+    components: [row]
   };
 }
 
@@ -102,8 +112,57 @@ async function criarCanalFarm(guild, member, dados) {
     permissionOverwrites
   });
 
+  return canal;
+}
+
+function criarModalRegistro() {
+  const modal = new ModalBuilder()
+    .setCustomId(REGISTRO_MODAL_ID)
+    .setTitle("Registro de novo membro");
+
+  const nomeInput = new TextInputBuilder()
+    .setCustomId("nome")
+    .setLabel("Nome")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(40);
+
+  const passaporteInput = new TextInputBuilder()
+    .setCustomId("passaporte")
+    .setLabel("Passaporte")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(20);
+
+  const numeroGameInput = new TextInputBuilder()
+    .setCustomId("numero_game")
+    .setLabel("Número em game")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false)
+    .setMaxLength(30);
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(nomeInput),
+    new ActionRowBuilder().addComponents(passaporteInput),
+    new ActionRowBuilder().addComponents(numeroGameInput)
+  );
+
+  return modal;
+}
+
+async function abrirModalRegistro(interaction) {
+  const modal = criarModalRegistro();
+  await interaction.showModal(modal);
+}
+
+async function enviarConfirmacaoNoCanalPrivado(canalFarm, member, dados, cargoAdicionado) {
   const linhas = [
-    `✅ Canal de farm criado para ${member}.`,
+    `✅ Registro concluído para ${member}.`,
+    "",
+    cargoAdicionado
+      ? "✅ Cargo de membro adicionado."
+      : "ℹ️ O usuário já possuía o cargo de membro.",
+    `✅ Canal privado criado: ${canalFarm}`,
     "",
     `**Nome:** ${dados.nome}`,
     `**Passaporte:** ${dados.passaporte}`
@@ -116,75 +175,54 @@ async function criarCanalFarm(guild, member, dados) {
   linhas.push("");
   linhas.push("Use este canal para sua organização de farm.");
 
-  await canal.send(linhas.join("\n"));
-
-  return canal;
+  await canalFarm.send(linhas.join("\n"));
 }
 
-async function enviarConfirmacaoPrivada(member, dados, cargoAdicionado, canalFarm) {
-  const linhas = [];
+async function processarModalRegistro(interaction) {
+  const nome = interaction.fields.getTextInputValue("nome").trim();
+  const passaporte = interaction.fields.getTextInputValue("passaporte").trim();
+  const numeroGame = interaction.fields.getTextInputValue("numero_game").trim();
 
-  linhas.push("✅ Seu registro foi processado com sucesso.");
+  const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
 
-  if (cargoAdicionado) {
-    linhas.push(`✅ Cargo de membro adicionado.`);
-  } else {
-    linhas.push(`ℹ️ Você já possuía o cargo de membro.`);
+  if (!member) {
+    return interaction.reply({
+      content: "❌ Não foi possível localizar seu membro no servidor.",
+      ephemeral: true
+    });
   }
 
-  if (canalFarm) {
-    linhas.push(`✅ Canal de farm criado: ${canalFarm}`);
+  const dados = {
+    nome,
+    passaporte,
+    numeroGame
+  };
+
+  let cargoAdicionado = false;
+
+  if (!member.roles.cache.has(cargoMembroPadrao)) {
+    await member.roles.add(cargoMembroPadrao, "Registro automático de novo membro");
+    cargoAdicionado = true;
   }
 
-  linhas.push("");
-  linhas.push(`**Nome:** ${dados.nome}`);
-  linesafe: if (dados.passaporte) {
-    linhas.push(`**Passaporte:** ${dados.passaporte}`);
-  }
-  if (dados.numeroGame) {
-    linhas.push(`**Número em game:** ${dados.numeroGame}`);
+  let canalFarm = await buscarCanalFarmExistente(interaction.guild, member.id);
+
+  if (!canalFarm) {
+    canalFarm = await criarCanalFarm(interaction.guild, member, dados);
   }
 
-  try {
-    await member.send(linhas.join("\n"));
-  } catch (error) {
-    console.log(`Não foi possível enviar DM para ${member.user.tag}.`);
-  }
-}
+  await enviarConfirmacaoNoCanalPrivado(canalFarm, member, dados, cargoAdicionado);
 
-async function processarRegistro(message) {
-  try {
-    if (!message.guild) return;
-    if (message.author.bot) return;
-    if (message.channel.id !== canais.registro) return;
-
-    const dados = extrairDadosRegistro(message.content);
-    if (!dados) return;
-
-    const member = await message.guild.members.fetch(message.author.id).catch(() => null);
-    if (!member) return;
-
-    let cargoAdicionado = false;
-    if (!member.roles.cache.has(cargoMembroPadrao)) {
-      await member.roles.add(cargoMembroPadrao, "Registro automático de novo membro");
-      cargoAdicionado = true;
-    }
-
-    let canalFarm = await buscarCanalFarmExistente(message.guild, member.id);
-
-    if (!canalFarm) {
-      canalFarm = await criarCanalFarm(message.guild, member, dados);
-    }
-
-    await enviarConfirmacaoPrivada(member, dados, cargoAdicionado, canalFarm);
-
-    await message.react("✅").catch(() => null);
-  } catch (error) {
-    console.error("Erro ao processar registro de membro:", error);
-    await message.react("❌").catch(() => null);
-  }
+  return interaction.reply({
+    content: `✅ Registro concluído. Seu canal privado é ${canalFarm}.`,
+    ephemeral: true
+  });
 }
 
 module.exports = {
-  processarRegistro
+  REGISTRO_BUTTON_ID,
+  REGISTRO_MODAL_ID,
+  abrirModalRegistro,
+  criarPainelRegistro,
+  processarModalRegistro
 };

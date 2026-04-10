@@ -1,6 +1,6 @@
 module.exports = {
   canais: {
-    registro: "1480507565770018849",
+    registro: "COLOQUE_AQUI_O_ID_DO_CANAL_REGISTRO",
 
     entrada: "1480507568265760812",
     saida: "1480507568265760814",
