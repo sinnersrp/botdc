@@ -45,7 +45,9 @@ module.exports = {
     "attachs",
     "colete",
     "algema",
-    "dinheiro sujo"
+    "envelope",
+    "lockpick",
+    "chip ilegal"
   ],
 
   itensArmas: [
@@ -63,7 +65,9 @@ module.exports = {
     "attachs",
     "colete",
     "algema",
-    "dinheiro sujo",
+    "envelope",
+    "lockpick",
+    "chip ilegal",
     "sub",
     "fiveseven",
     "c4"

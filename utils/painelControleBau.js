@@ -35,7 +35,9 @@ const ITENS_LABEL = {
   attachs: "Attachs",
   colete: "Colete",
   algema: "Algema",
-  "dinheiro sujo": "Dinheiro Sujo",
+  envelope: "Envelope",
+  lockpick: "Lockpick",
+  "chip ilegal": "Chip Ilegal",
   sub: "SUB",
   fiveseven: "FiveSeven",
   c4: "C4"
@@ -301,7 +303,6 @@ async function processarModalLiberar(interaction, client, pares) {
 
   for (const par of pares) {
     const tipo = getTipoItem(par.item);
-
     if (!tipo) {
       return interaction.reply({
         content: `❌ O item **${par.item}** é inválido.`,

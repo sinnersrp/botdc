@@ -12,7 +12,9 @@ const opcoesItens = [
   { name: "Attachs", value: "attachs" },
   { name: "Colete", value: "colete" },
   { name: "Algema", value: "algema" },
-  { name: "Dinheiro Sujo", value: "dinheiro sujo" },
+  { name: "Envelope", value: "envelope" },
+  { name: "Lockpick", value: "lockpick" },
+  { name: "Chip Ilegal", value: "chip ilegal" },
   { name: "SUB", value: "sub" },
   { name: "FiveSeven", value: "fiveseven" },
   { name: "C4", value: "c4" }

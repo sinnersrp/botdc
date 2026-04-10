@@ -5,87 +5,127 @@ const { canais, itensGerais, itensArmas } = require("../config/config");
 const { isMembro } = require("../utils/permissoes");
 const logBau = require("../utils/logBau");
 
+const opcoesItens = [
+  { name: "Maconha", value: "maconha" },
+  { name: "Metafetamina", value: "metafetamina" },
+  { name: "Cocaína", value: "cocaina" },
+  { name: "Muni PT", value: "muni pt" },
+  { name: "Muni SUB", value: "muni sub" },
+  { name: "Attachs", value: "attachs" },
+  { name: "Colete", value: "colete" },
+  { name: "Algema", value: "algema" },
+  { name: "Envelope", value: "envelope" },
+  { name: "Lockpick", value: "lockpick" },
+  { name: "Chip Ilegal", value: "chip ilegal" },
+  { name: "SUB", value: "sub" },
+  { name: "FiveSeven", value: "fiveseven" },
+  { name: "C4", value: "c4" }
+];
+
+function getTipoItem(item) {
+  if (itensGerais.includes(item)) return "geral";
+  if (itensArmas.includes(item)) return "arma";
+  return null;
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("devolver-item")
-    .setDescription("Devolver item ao controle de baú")
+    .setDescription("Devolver até 3 itens para o controle de baú")
     .addStringOption(option =>
-      option.setName("item").setDescription("Nome do item").setRequired(true)
+      option.setName("item1").setDescription("Primeiro item").setRequired(true).addChoices(...opcoesItens)
     )
     .addIntegerOption(option =>
-      option.setName("quantidade").setDescription("Quantidade").setRequired(true)
+      option.setName("quantidade1").setDescription("Quantidade do primeiro item").setRequired(true).setMinValue(1)
+    )
+    .addStringOption(option =>
+      option.setName("item2").setDescription("Segundo item").setRequired(false).addChoices(...opcoesItens)
+    )
+    .addIntegerOption(option =>
+      option.setName("quantidade2").setDescription("Quantidade do segundo item").setRequired(false).setMinValue(1)
+    )
+    .addStringOption(option =>
+      option.setName("item3").setDescription("Terceiro item").setRequired(false).addChoices(...opcoesItens)
+    )
+    .addIntegerOption(option =>
+      option.setName("quantidade3").setDescription("Quantidade do terceiro item").setRequired(false).setMinValue(1)
     ),
 
   async execute(interaction, client) {
-    const item = interaction.options.getString("item").toLowerCase().trim();
-    const quantidade = interaction.options.getInteger("quantidade");
-
     if (!isMembro(interaction.member)) {
-      return interaction.reply({
-        content: "❌ Você não tem permissão para devolver itens.",
-        ephemeral: true
-      });
+      return interaction.reply({ content: "❌ Você não tem permissão para devolver itens.", flags: 64 });
     }
 
     if (interaction.channel.id !== canais.entrada) {
-      return interaction.reply({
-        content: "❌ Use este comando no canal de entrada do controle de baú.",
-        ephemeral: true
-      });
+      return interaction.reply({ content: "❌ Use este comando no canal de entrada do controle de baú.", flags: 64 });
     }
 
-    if (quantidade <= 0) {
-      return interaction.reply({
-        content: "❌ A quantidade precisa ser maior que 0.",
-        ephemeral: true
-      });
+    const pares = [
+      { item: interaction.options.getString("item1"), quantidade: interaction.options.getInteger("quantidade1") },
+      { item: interaction.options.getString("item2"), quantidade: interaction.options.getInteger("quantidade2") },
+      { item: interaction.options.getString("item3"), quantidade: interaction.options.getInteger("quantidade3") }
+    ].filter(p => p.item && p.quantidade);
+
+    const itensUsados = new Set();
+    for (const par of pares) {
+      if (itensUsados.has(par.item)) {
+        return interaction.reply({ content: `❌ O item **${par.item}** foi repetido no mesmo comando.`, flags: 64 });
+      }
+      itensUsados.add(par.item);
+
+      const tipo = getTipoItem(par.item);
+      if (!tipo) {
+        return interaction.reply({ content: `❌ O item **${par.item}** é inválido.`, flags: 64 });
+      }
     }
 
-    let tipo = "geral";
-    if (itensArmas.includes(item)) tipo = "arma";
-    if (!itensGerais.includes(item) && !itensArmas.includes(item)) {
-      return interaction.reply({
-        content: "❌ Item inválido.",
-        ephemeral: true
+    const cargoNome = "Membro";
+    const resposta = [];
+
+    for (const par of pares) {
+      const tipo = getTipoItem(par.item);
+      let estoque = await ControleBau.findOne({ item: par.item });
+
+      if (!estoque) {
+        estoque = new ControleBau({
+          item: par.item,
+          quantidade: par.quantidade,
+          tipo
+        });
+      } else {
+        estoque.quantidade += par.quantidade;
+      }
+
+      await estoque.save();
+
+      await MovimentacaoBau.create({
+        userId: interaction.user.id,
+        username: interaction.user.tag,
+        cargo: cargoNome,
+        acao: "devolveu",
+        item: par.item,
+        quantidade: par.quantidade,
+        tipo,
+        canalId: interaction.channel.id,
+        canalNome: interaction.channel.name
       });
+
+      await logBau(client, {
+        username: interaction.user.tag,
+        cargo: cargoNome,
+        acao: "Devolveu",
+        item: par.item,
+        quantidade: par.quantidade,
+        tipo,
+        canalNome: interaction.channel.name
+      });
+
+      resposta.push(`• ${par.quantidade}x ${par.item}`);
     }
 
-    let estoque = await ControleBau.findOne({ item });
-
-    if (!estoque) {
-      estoque = new ControleBau({
-        item,
-        quantidade,
-        tipo
-      });
-    } else {
-      estoque.quantidade += quantidade;
-    }
-
-    await estoque.save();
-
-    await MovimentacaoBau.create({
-      userId: interaction.user.id,
-      username: interaction.user.tag,
-      cargo: "Membro",
-      acao: "devolveu",
-      item,
-      quantidade,
-      tipo: estoque.tipo,
-      canalId: interaction.channel.id,
-      canalNome: interaction.channel.name
+    return interaction.reply({
+      content: `📥 Itens devolvidos ao controle de baú:\n${resposta.join("\n")}`,
+      flags: 64
     });
-
-    await logBau(client, {
-      username: interaction.user.tag,
-      cargo: "Membro",
-      acao: "Devolveu",
-      item,
-      quantidade,
-      tipo: estoque.tipo,
-      canalNome: interaction.channel.name
-    });
-
-    return interaction.reply(`🔁 Você devolveu ${quantidade}x ${item}.`);
   }
 };

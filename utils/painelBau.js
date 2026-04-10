@@ -31,7 +31,9 @@ const ITENS_LABEL = {
   attachs: "Attachs",
   colete: "Colete",
   algema: "Algema",
-  "dinheiro sujo": "Dinheiro Sujo",
+  envelope: "Envelope",
+  lockpick: "Lockpick",
+  "chip ilegal": "Chip Ilegal",
   sub: "SUB",
   fiveseven: "FiveSeven",
   c4: "C4"
