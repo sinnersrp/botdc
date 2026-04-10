@@ -4,13 +4,19 @@ const mongoose = require("mongoose");
 const fs = require("fs");
 const path = require("path");
 const { iniciarFarmScheduler } = require("./tasks/farmScheduler");
+const {
+  REGISTRO_BUTTON_ID,
+  REGISTRO_MODAL_ID,
+  abrirModalRegistro,
+  processarModalRegistro
+} = require("./utils/registroMembro");
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers
+    GatewayIntentBits.MessageContent
   ]
 });
 
@@ -18,11 +24,12 @@ client.commands = new Collection();
 
 const commandsPath = path.join(__dirname, "commands");
 if (fs.existsSync(commandsPath)) {
-  const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith(".js"));
+  const commandFiles = fs.readdirSync(commandsPath).filter((file) => file.endsWith(".js"));
 
   for (const file of commandFiles) {
     const filePath = path.join(commandsPath, file);
     const command = require(filePath);
+
     if (command.data && command.execute) {
       client.commands.set(command.data.name, command);
     }
@@ -34,26 +41,47 @@ client.once("clientReady", async () => {
   iniciarFarmScheduler(client);
 });
 
-client.on("interactionCreate", async interaction => {
-  if (!interaction.isChatInputCommand()) return;
-
-  const command = client.commands.get(interaction.commandName);
-  if (!command) return;
-
+client.on("interactionCreate", async (interaction) => {
   try {
+    if (interaction.isButton()) {
+      console.log(`🔘 Botão clicado: ${interaction.customId} por ${interaction.user.tag}`);
+
+      if (interaction.customId === REGISTRO_BUTTON_ID) {
+        await abrirModalRegistro(interaction);
+      }
+
+      return;
+    }
+
+    if (interaction.isModalSubmit()) {
+      console.log(`📝 Modal enviado: ${interaction.customId} por ${interaction.user.tag}`);
+
+      if (interaction.customId === REGISTRO_MODAL_ID) {
+        await processarModalRegistro(interaction);
+      }
+
+      return;
+    }
+
+    if (!interaction.isChatInputCommand()) return;
+
+    const command = client.commands.get(interaction.commandName);
+    if (!command) return;
+
     await command.execute(interaction, client);
   } catch (error) {
-    console.error(error);
+    console.error("❌ Erro no interactionCreate:", error);
+
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp({
-        content: "❌ Deu erro ao executar o comando.",
-        ephemeral: true
-      });
+        content: "❌ Ocorreu um erro ao processar essa ação.",
+        flags: 64
+      }).catch(() => null);
     } else {
       await interaction.reply({
-        content: "❌ Deu erro ao executar o comando.",
-        ephemeral: true
-      });
+        content: "❌ Ocorreu um erro ao processar essa ação.",
+        flags: 64
+      }).catch(() => null);
     }
   }
 });
@@ -63,6 +91,6 @@ mongoose.connect(process.env.MONGO_URI)
     console.log("✅ MongoDB conectado");
     client.login(process.env.DISCORD_TOKEN);
   })
-  .catch(err => {
+  .catch((err) => {
     console.error("❌ Erro ao conectar no MongoDB:", err);
   });

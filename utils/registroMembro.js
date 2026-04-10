@@ -73,7 +73,6 @@ async function buscarCanalFarmExistente(guild, userId) {
 async function criarCanalFarm(guild, member, dados) {
   const nomeBase = limparNomeCanal(dados.nome || member.user.username || "membro");
   const passaporteBase = limparPassaporte(dados.passaporte || "sem-passaporte");
-
   const nomeCanal = `💸┃${nomeBase}┃${passaporteBase}`.slice(0, 95);
 
   const permissionOverwrites = [
@@ -162,7 +161,6 @@ async function enviarConfirmacaoNoCanalPrivado(canalFarm, member, dados, cargoAd
     cargoAdicionado
       ? "✅ Cargo de membro adicionado."
       : "ℹ️ O usuário já possuía o cargo de membro.",
-    `✅ Canal privado criado: ${canalFarm}`,
     "",
     `**Nome:** ${dados.nome}`,
     `**Passaporte:** ${dados.passaporte}`
@@ -188,7 +186,7 @@ async function processarModalRegistro(interaction) {
   if (!member) {
     return interaction.reply({
       content: "❌ Não foi possível localizar seu membro no servidor.",
-      ephemeral: true
+      flags: 64
     });
   }
 
@@ -215,7 +213,7 @@ async function processarModalRegistro(interaction) {
 
   return interaction.reply({
     content: `✅ Registro concluído. Seu canal privado é ${canalFarm}.`,
-    ephemeral: true
+    flags: 64
   });
 }
 
