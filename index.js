@@ -25,6 +25,23 @@ const {
   verEstoqueBauGerencia
 } = require("./utils/painelBau");
 
+const {
+  CONTROLE_BUTTON_LIBERAR,
+  CONTROLE_BUTTON_RETIRAR,
+  CONTROLE_BUTTON_DEVOLVER,
+  CONTROLE_BUTTON_VER,
+  CONTROLE_MODAL_LIBERAR,
+  CONTROLE_MODAL_RETIRAR,
+  CONTROLE_MODAL_DEVOLVER,
+  abrirModalLiberar,
+  abrirModalRetirar,
+  abrirModalDevolver,
+  processarModalLiberar,
+  processarModalRetirar,
+  processarModalDevolver,
+  verEstoqueControleBau
+} = require("./utils/painelControleBau");
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -80,6 +97,26 @@ client.on("interactionCreate", async (interaction) => {
         return;
       }
 
+      if (interaction.customId === CONTROLE_BUTTON_LIBERAR) {
+        await abrirModalLiberar(interaction);
+        return;
+      }
+
+      if (interaction.customId === CONTROLE_BUTTON_RETIRAR) {
+        await abrirModalRetirar(interaction);
+        return;
+      }
+
+      if (interaction.customId === CONTROLE_BUTTON_DEVOLVER) {
+        await abrirModalDevolver(interaction);
+        return;
+      }
+
+      if (interaction.customId === CONTROLE_BUTTON_VER) {
+        await verEstoqueControleBau(interaction);
+        return;
+      }
+
       return;
     }
 
@@ -98,6 +135,21 @@ client.on("interactionCreate", async (interaction) => {
 
       if (interaction.customId === BAU_MODAL_SAIDA) {
         await processarModalBauSaida(interaction);
+        return;
+      }
+
+      if (interaction.customId === CONTROLE_MODAL_LIBERAR) {
+        await processarModalLiberar(interaction, client);
+        return;
+      }
+
+      if (interaction.customId === CONTROLE_MODAL_RETIRAR) {
+        await processarModalRetirar(interaction, client);
+        return;
+      }
+
+      if (interaction.customId === CONTROLE_MODAL_DEVOLVER) {
+        await processarModalDevolver(interaction, client);
         return;
       }
 
