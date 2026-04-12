@@ -1,11 +1,12 @@
 const { SlashCommandBuilder } = require("discord.js");
 const { isGerenteOuLider } = require("../utils/permissoes");
 const { criarPainelBau } = require("../utils/painelBau");
+const { enviarPainelNoForum } = require("../utils/forumPainel");
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("painel-bau")
-    .setDescription("Envia o painel bonito do baú da gerência"),
+    .setDescription("Envia o painel bonito do baú da gerência no fórum comando-bot"),
 
   async execute(interaction) {
     if (!isGerenteOuLider(interaction.member)) {
@@ -15,10 +16,14 @@ module.exports = {
       });
     }
 
-    await interaction.channel.send(criarPainelBau());
+    await enviarPainelNoForum(
+      interaction.client,
+      "📦 Painel do Baú da Gerência",
+      criarPainelBau()
+    );
 
     return interaction.reply({
-      content: "✅ Painel do baú enviado com sucesso.",
+      content: "✅ Painel do baú da gerência enviado no fórum comando-bot.",
       flags: 64
     });
   }

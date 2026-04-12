@@ -3,6 +3,9 @@ module.exports = {
     registro: "1480507565770018849",
     painelAvisos: "1480507565770018851",
 
+    categoriaGerencia: "1492979624278364230",
+    forumComandoBot: "1492991343948070922",
+
     entrada: "1480507568265760812",
     saida: "1480507568265760814",
     entradaArma: "1480507568265760812",
