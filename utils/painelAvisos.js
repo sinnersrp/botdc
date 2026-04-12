@@ -27,10 +27,6 @@ function isGerencia(interaction) {
   return isGerenteOuLider(interaction.member);
 }
 
-function normalizarAcao(acao = "") {
-  return acao === "agendar" ? "agendar" : "agora";
-}
-
 function getMencaoLabel(tipo) {
   if (tipo === "everyone") return "@everyone";
   if (tipo === "membro") return "@membro";
@@ -169,14 +165,14 @@ function criarMenuHora(mencaoTipo, diaOffset) {
     .setCustomId(`${AVISO_SELECT_HORA_PREFIX}:${mencaoTipo}:${diaOffset}`)
     .setPlaceholder("Escolha o horário do aviso")
     .addOptions(
-      { label: "09:00", value: "09:00", description: "Enviar às 09:00" },
-      { label: "12:00", value: "12:00", description: "Enviar às 12:00" },
-      { label: "15:00", value: "15:00", description: "Enviar às 15:00" },
-      { label: "18:00", value: "18:00", description: "Enviar às 18:00" },
-      { label: "20:00", value: "20:00", description: "Enviar às 20:00" },
-      { label: "21:00", value: "21:00", description: "Enviar às 21:00" },
-      { label: "22:00", value: "22:00", description: "Enviar às 22:00" },
-      { label: "23:00", value: "23:00", description: "Enviar às 23:00" }
+      { label: "09:00", value: "09-00", description: "Enviar às 09:00" },
+      { label: "12:00", value: "12-00", description: "Enviar às 12:00" },
+      { label: "15:00", value: "15-00", description: "Enviar às 15:00" },
+      { label: "18:00", value: "18-00", description: "Enviar às 18:00" },
+      { label: "20:00", value: "20-00", description: "Enviar às 20:00" },
+      { label: "21:00", value: "21-00", description: "Enviar às 21:00" },
+      { label: "22:00", value: "22-00", description: "Enviar às 22:00" },
+      { label: "23:00", value: "23-00", description: "Enviar às 23:00" }
     );
 
   return {
@@ -203,9 +199,9 @@ function criarModalAgora(mencaoTipo) {
   return modal;
 }
 
-function criarModalAgendar(mencaoTipo, diaOffset, horaTexto) {
+function criarModalAgendar(mencaoTipo, diaOffset, horaTextoSeguro) {
   const modal = new ModalBuilder()
-    .setCustomId(`${AVISO_MODAL_AGENDAR_PREFIX}:${mencaoTipo}:${diaOffset}:${horaTexto}`)
+    .setCustomId(`${AVISO_MODAL_AGENDAR_PREFIX}:${mencaoTipo}:${diaOffset}:${horaTextoSeguro}`)
     .setTitle("Agendar aviso");
 
   const mensagem = new TextInputBuilder()
@@ -220,8 +216,18 @@ function criarModalAgendar(mencaoTipo, diaOffset, horaTexto) {
   return modal;
 }
 
-function montarDataAgendada(diaOffset, horaTexto) {
+function montarDataAgendada(diaOffset, horaTextoSeguro) {
+  const horaTexto = String(horaTextoSeguro).replace("-", ":");
   const [hora, minuto] = horaTexto.split(":").map(Number);
+
+  if (
+    !Number.isInteger(Number(diaOffset)) ||
+    !Number.isInteger(hora) ||
+    !Number.isInteger(minuto)
+  ) {
+    return null;
+  }
+
   const agora = new Date();
   const data = new Date(
     agora.getFullYear(),
@@ -232,6 +238,10 @@ function montarDataAgendada(diaOffset, horaTexto) {
     0,
     0
   );
+
+  if (Number.isNaN(data.getTime())) {
+    return null;
+  }
 
   return data;
 }
@@ -276,8 +286,7 @@ async function processarSelectMencao(interaction) {
     });
   }
 
-  const [, acaoBruta] = interaction.customId.split(":");
-  const acao = normalizarAcao(acaoBruta);
+  const [, acao] = interaction.customId.split(":");
   const mencaoTipo = interaction.values[0];
 
   if (acao === "agora") {
@@ -310,9 +319,9 @@ async function processarSelectHora(interaction) {
   }
 
   const [, mencaoTipo, diaOffset] = interaction.customId.split(":");
-  const horaTexto = interaction.values[0];
+  const horaTextoSeguro = interaction.values[0];
 
-  return interaction.showModal(criarModalAgendar(mencaoTipo, diaOffset, horaTexto));
+  return interaction.showModal(criarModalAgendar(mencaoTipo, diaOffset, horaTextoSeguro));
 }
 
 async function enviarAvisoAgora(interaction) {
@@ -361,10 +370,17 @@ async function agendarAviso(interaction) {
     });
   }
 
-  const [, mencaoTipo, diaOffset, horaTexto] = interaction.customId.split(":");
+  const [, mencaoTipo, diaOffset, horaTextoSeguro] = interaction.customId.split(":");
   const mensagem = interaction.fields.getTextInputValue("mensagem").trim();
 
-  const dataAgendada = montarDataAgendada(diaOffset, horaTexto);
+  const dataAgendada = montarDataAgendada(diaOffset, horaTextoSeguro);
+
+  if (!dataAgendada) {
+    return interaction.reply({
+      content: "❌ Não foi possível montar a data do agendamento. Tente novamente.",
+      flags: 64
+    });
+  }
 
   if (dataAgendada.getTime() <= Date.now()) {
     return interaction.reply({
