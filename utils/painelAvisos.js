@@ -12,6 +12,7 @@ const {
 const AvisoAgendado = require("../models/AvisoAgendado");
 const { canais, cargoMembroPadrao } = require("../config/config");
 const { isGerenteOuLider } = require("./permissoes");
+const { enviarAvisoPrivadoParaAlvos } = require("./avisoEntrega");
 
 const AVISO_BUTTON_AGORA = "aviso_enviar_agora";
 const AVISO_BUTTON_AGENDAR = "aviso_agendar";
@@ -75,7 +76,11 @@ function criarPainelAvisos() {
         "**Fluxo simples:**",
         "1. escolher menção",
         "2. escolher dia e hora, se for agendado",
-        "3. escrever só a mensagem"
+        "3. escrever só a mensagem",
+        "",
+        "**Entrega do aviso:**",
+        "• canal de avisos",
+        "• privado dos membros"
       ].join("\n")
     );
 
@@ -356,8 +361,18 @@ async function enviarAvisoAgora(interaction) {
     allowedMentions: getAllowedMentions(mencaoTipo)
   });
 
+  const resultadoDM = await enviarAvisoPrivadoParaAlvos(
+    interaction.guild,
+    mensagem,
+    mencaoTipo
+  );
+
   return interaction.reply({
-    content: `✅ Aviso enviado com sucesso com menção **${getMencaoLabel(mencaoTipo)}**.`,
+    content: [
+      `✅ Aviso enviado com sucesso com menção **${getMencaoLabel(mencaoTipo)}**.`,
+      `📩 Privado: **${resultadoDM.enviados}** enviados`,
+      `⚠️ Falhas no privado: **${resultadoDM.falhas}**`
+    ].join("\n"),
     flags: 64
   });
 }
@@ -405,7 +420,8 @@ async function agendarAviso(interaction) {
     content: [
       "✅ Aviso agendado com sucesso.",
       `🔔 Menção: **${getMencaoLabel(mencaoTipo)}**`,
-      `⏰ Envio: **${formatarDataBr(dataAgendada)}**`
+      `⏰ Envio: **${formatarDataBr(dataAgendada)}**`,
+      "📩 O bot também tentará mandar no privado quando chegar o horário."
     ].join("\n"),
     flags: 64
   });
