@@ -56,10 +56,16 @@ const {
 const {
   AVISO_BUTTON_AGORA,
   AVISO_BUTTON_AGENDAR,
-  AVISO_MODAL_AGORA,
-  AVISO_MODAL_AGENDAR,
+  AVISO_SELECT_MENCAO_PREFIX,
+  AVISO_SELECT_DIA_PREFIX,
+  AVISO_SELECT_HORA_PREFIX,
+  AVISO_MODAL_AGORA_PREFIX,
+  AVISO_MODAL_AGENDAR_PREFIX,
   abrirModalAvisoAgora,
   abrirModalAvisoAgendar,
+  processarSelectMencao,
+  processarSelectDia,
+  processarSelectHora,
   enviarAvisoAgora,
   agendarAviso
 } = require("./utils/painelAvisos");
@@ -210,6 +216,21 @@ client.on("interactionCreate", async (interaction) => {
         return;
       }
 
+      if (interaction.customId.startsWith(`${AVISO_SELECT_MENCAO_PREFIX}:`)) {
+        await processarSelectMencao(interaction);
+        return;
+      }
+
+      if (interaction.customId.startsWith(`${AVISO_SELECT_DIA_PREFIX}:`)) {
+        await processarSelectDia(interaction);
+        return;
+      }
+
+      if (interaction.customId.startsWith(`${AVISO_SELECT_HORA_PREFIX}:`)) {
+        await processarSelectHora(interaction);
+        return;
+      }
+
       return;
     }
 
@@ -236,12 +257,12 @@ client.on("interactionCreate", async (interaction) => {
         return;
       }
 
-      if (interaction.customId === AVISO_MODAL_AGORA) {
+      if (interaction.customId.startsWith(`${AVISO_MODAL_AGORA_PREFIX}:`)) {
         await enviarAvisoAgora(interaction);
         return;
       }
 
-      if (interaction.customId === AVISO_MODAL_AGENDAR) {
+      if (interaction.customId.startsWith(`${AVISO_MODAL_AGENDAR_PREFIX}:`)) {
         await agendarAviso(interaction);
         return;
       }
