@@ -1,6 +1,7 @@
 module.exports = {
   canais: {
     registro: "1480507565770018849",
+    painelAvisos: "1480507565770018851",
 
     entrada: "1480507568265760812",
     saida: "1480507568265760814",

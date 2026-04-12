@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
 const fs = require("fs");
 const path = require("path");
 const { iniciarFarmScheduler } = require("./tasks/farmScheduler");
+const { iniciarAvisoScheduler } = require("./tasks/avisoScheduler");
 const { processarSaidaOuRetorno } = require("./utils/saidaMembro");
 
 const {
@@ -52,6 +53,17 @@ const {
   processarModalFarm
 } = require("./utils/painelFarm");
 
+const {
+  AVISO_BUTTON_AGORA,
+  AVISO_BUTTON_AGENDAR,
+  AVISO_MODAL_AGORA,
+  AVISO_MODAL_AGENDAR,
+  abrirModalAvisoAgora,
+  abrirModalAvisoAgendar,
+  enviarAvisoAgora,
+  agendarAviso
+} = require("./utils/painelAvisos");
+
 const ajusteGerenciaCommand = require("./commands/ajuste-gerencia");
 
 const client = new Client({
@@ -82,6 +94,7 @@ if (fs.existsSync(commandsPath)) {
 client.once("clientReady", async () => {
   console.log(`✅ Bot online como ${client.user.tag}`);
   iniciarFarmScheduler(client);
+  iniciarAvisoScheduler(client);
 });
 
 client.on("guildMemberUpdate", async (oldMember, newMember) => {
@@ -150,6 +163,16 @@ client.on("interactionCreate", async (interaction) => {
         return;
       }
 
+      if (interaction.customId === AVISO_BUTTON_AGORA) {
+        await abrirModalAvisoAgora(interaction);
+        return;
+      }
+
+      if (interaction.customId === AVISO_BUTTON_AGENDAR) {
+        await abrirModalAvisoAgendar(interaction);
+        return;
+      }
+
       if (interaction.customId === "ajusteFarmCancelar") {
         await interaction.update({
           content: "❌ Ajuste cancelado.",
@@ -210,6 +233,16 @@ client.on("interactionCreate", async (interaction) => {
 
       if (interaction.customId === FARM_MODAL_REGISTRAR) {
         await processarModalFarm(interaction);
+        return;
+      }
+
+      if (interaction.customId === AVISO_MODAL_AGORA) {
+        await enviarAvisoAgora(interaction);
+        return;
+      }
+
+      if (interaction.customId === AVISO_MODAL_AGENDAR) {
+        await agendarAviso(interaction);
         return;
       }
 
