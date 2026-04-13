@@ -1006,7 +1006,6 @@ async function aplicarVisualDashboard(
             title: "Total por membro na semana atual",
             basicChart: {
               chartType: "COLUMN",
-              legendPosition: "NONE",
               axis: [
                 {
                   position: "BOTTOM_AXIS",
