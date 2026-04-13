@@ -145,7 +145,7 @@ async function writeSheet(sheets, spreadsheetId, title, rows) {
   });
 }
 
-async function resetSheetVisualState(sheets, spreadsheetId, sheetIdNumber, maxColumns = 26, maxRows = 2000) {
+async function resetSheetVisualState(sheets, spreadsheetId, sheetIdNumber) {
   const requests = [
     {
       clearBasicFilter: {
@@ -420,7 +420,7 @@ async function limparGraficosDaAba(sheets, spreadsheetId, title) {
 }
 
 async function aplicarVisualSemana(sheets, spreadsheetId, title, sheetIdNumber, totalRows) {
-  await resetSheetVisualState(sheets, spreadsheetId, sheetIdNumber, 10, Math.max(totalRows + 20, 200));
+  await resetSheetVisualState(sheets, spreadsheetId, sheetIdNumber);
 
   const requests = [
     {
@@ -541,19 +541,6 @@ async function aplicarVisualSemana(sheets, spreadsheetId, title, sheetIdNumber, 
       }
     },
     {
-      setBasicFilter: {
-        filter: {
-          range: {
-            sheetId: sheetIdNumber,
-            startRowIndex: 5,
-            endRowIndex: Math.max(totalRows, 6),
-            startColumnIndex: 0,
-            endColumnIndex: 10
-          }
-        }
-      }
-    },
-    {
       autoResizeDimensions: {
         dimensions: {
           sheetId: sheetIdNumber,
@@ -572,7 +559,7 @@ async function aplicarVisualSemana(sheets, spreadsheetId, title, sheetIdNumber, 
 }
 
 async function aplicarVisualResumo(sheets, spreadsheetId, title, sheetIdNumber, totalRows) {
-  await resetSheetVisualState(sheets, spreadsheetId, sheetIdNumber, 13, Math.max(totalRows + 20, 200));
+  await resetSheetVisualState(sheets, spreadsheetId, sheetIdNumber);
 
   const requests = [
     {
@@ -745,19 +732,6 @@ async function aplicarVisualResumo(sheets, spreadsheetId, title, sheetIdNumber, 
       }
     },
     {
-      setBasicFilter: {
-        filter: {
-          range: {
-            sheetId: sheetIdNumber,
-            startRowIndex: 5,
-            endRowIndex: Math.max(totalRows, 6),
-            startColumnIndex: 0,
-            endColumnIndex: 13
-          }
-        }
-      }
-    },
-    {
       autoResizeDimensions: {
         dimensions: {
           sheetId: sheetIdNumber,
@@ -787,7 +761,7 @@ async function aplicarVisualDashboard(
   statusFim
 ) {
   await limparGraficosDaAba(sheets, spreadsheetId, title);
-  await resetSheetVisualState(sheets, spreadsheetId, sheetIdNumber, 10, Math.max(totalRows + 30, 300));
+  await resetSheetVisualState(sheets, spreadsheetId, sheetIdNumber);
 
   const requests = [
     {
@@ -957,19 +931,6 @@ async function aplicarVisualDashboard(
           }
         },
         fields: "gridProperties.frozenRowCount"
-      }
-    },
-    {
-      setBasicFilter: {
-        filter: {
-          range: {
-            sheetId: sheetIdNumber,
-            startRowIndex: tabelaInicio - 1,
-            endRowIndex: Math.max(tabelaFim + 1, tabelaInicio),
-            startColumnIndex: 0,
-            endColumnIndex: 5
-          }
-        }
       }
     },
     {
