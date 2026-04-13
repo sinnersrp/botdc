@@ -72,7 +72,5 @@ async function sincronizarCaixaFaccao() {
 }
 
 module.exports = {
-  getOuCriarCaixaFaccao,
-  calcularTotaisFinanceiros,
-  sincronizarCaixaFaccao
+  sincronizarPlanilhaFarm
 };

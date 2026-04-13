@@ -3,6 +3,7 @@ const { Client, GatewayIntentBits, Collection } = require("discord.js");
 const mongoose = require("mongoose");
 const fs = require("fs");
 const path = require("path");
+
 const { iniciarFarmScheduler } = require("./tasks/farmScheduler");
 const { iniciarAvisoScheduler } = require("./tasks/avisoScheduler");
 const { processarSaidaOuRetorno } = require("./utils/saidaMembro");
@@ -91,10 +92,15 @@ if (fs.existsSync(commandsPath)) {
 
   for (const file of commandFiles) {
     const filePath = path.join(commandsPath, file);
-    const command = require(filePath);
 
-    if (command.data && command.execute) {
-      client.commands.set(command.data.name, command);
+    try {
+      const command = require(filePath);
+
+      if (command.data && command.execute) {
+        client.commands.set(command.data.name, command);
+      }
+    } catch (error) {
+      console.error(`❌ Erro ao carregar ${file}:`, error);
     }
   }
 }
@@ -129,7 +135,7 @@ client.on("guildMemberUpdate", async (oldMember, newMember) => {
 
 client.on("messageCreate", async (message) => {
   try {
-    await processarMensagemComprovanteFarm(message, client);
+    await processarMensagemComprovanteFarm(message);
   } catch (error) {
     console.error("❌ Erro no messageCreate:", error);
   }
