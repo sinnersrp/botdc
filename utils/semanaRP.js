@@ -16,28 +16,30 @@ function getSemanaRP(baseDate = new Date()) {
 
   const atual = new Date(ano, mes, dia, hora, minuto, 0, 0);
 
-  // 0 = domingo, 1 = segunda ... 5 = sexta, 6 = sábado
+  // 0 = domingo ... 6 = sábado
   const weekday = atual.getDay();
 
-  // Queremos semana de SEXTA até a próxima SEXTA
+  // Semana do farm:
+  // começa no sábado às 22:00
+  // termina no próximo sábado às 21:59:59.999
+  //
   // Exemplo:
-  // 10/04 22:00 até 17/04 21:59
-  // Para identificação, usamos 10/04_17/04
+  // 11/04 22:00 até 18/04 21:59
+  // semanaId = 2026-04-11_2026-04-18
 
   let inicio = new Date(atual);
-  let diasDesdeSexta = (weekday - 5 + 7) % 7;
 
-  inicio.setDate(atual.getDate() - diasDesdeSexta);
+  // Quantos dias se passaram desde o último sábado
+  const diasDesdeSabado = (weekday - 6 + 7) % 7;
+
+  inicio.setDate(atual.getDate() - diasDesdeSabado);
   inicio.setHours(22, 0, 0, 0);
 
-  // Se for sexta antes das 22:00, ainda está na semana anterior
-  if (weekday === 5 && (hora < 22 || (hora === 22 && minuto === 0 ? false : false))) {
-    if (hora < 22) {
-      inicio.setDate(inicio.getDate() - 7);
-    }
+  // Se hoje é sábado antes das 22:00, ainda estamos na semana anterior
+  if (weekday === 6 && hora < 22) {
+    inicio.setDate(inicio.getDate() - 7);
   }
 
-  // fim = próxima sexta às 21:59:59.999
   const fim = new Date(inicio);
   fim.setDate(inicio.getDate() + 7);
   fim.setHours(21, 59, 59, 999);
