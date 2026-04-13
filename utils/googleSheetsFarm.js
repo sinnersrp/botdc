@@ -151,17 +151,6 @@ async function resetSheetVisualState(sheets, spreadsheetId, sheetIdNumber, maxCo
       clearBasicFilter: {
         sheetId: sheetIdNumber
       }
-    },
-    {
-      unmergeCells: {
-        range: {
-          sheetId: sheetIdNumber,
-          startRowIndex: 0,
-          endRowIndex: maxRows,
-          startColumnIndex: 0,
-          endColumnIndex: maxColumns
-        }
-      }
     }
   ];
 
@@ -171,7 +160,7 @@ async function resetSheetVisualState(sheets, spreadsheetId, sheetIdNumber, maxCo
       requestBody: { requests }
     });
   } catch (error) {
-    // ignora se não houver filtro ou merge
+    // ignora se não houver filtro
   }
 }
 
@@ -435,30 +424,6 @@ async function aplicarVisualSemana(sheets, spreadsheetId, title, sheetIdNumber, 
 
   const requests = [
     {
-      mergeCells: {
-        range: {
-          sheetId: sheetIdNumber,
-          startRowIndex: 0,
-          endRowIndex: 1,
-          startColumnIndex: 0,
-          endColumnIndex: 10
-        },
-        mergeType: "MERGE_ALL"
-      }
-    },
-    {
-      mergeCells: {
-        range: {
-          sheetId: sheetIdNumber,
-          startRowIndex: 1,
-          endRowIndex: 2,
-          startColumnIndex: 0,
-          endColumnIndex: 10
-        },
-        mergeType: "MERGE_ALL"
-      }
-    },
-    {
       repeatCell: {
         range: {
           sheetId: sheetIdNumber,
@@ -610,30 +575,6 @@ async function aplicarVisualResumo(sheets, spreadsheetId, title, sheetIdNumber, 
   await resetSheetVisualState(sheets, spreadsheetId, sheetIdNumber, 13, Math.max(totalRows + 20, 200));
 
   const requests = [
-    {
-      mergeCells: {
-        range: {
-          sheetId: sheetIdNumber,
-          startRowIndex: 0,
-          endRowIndex: 1,
-          startColumnIndex: 0,
-          endColumnIndex: 13
-        },
-        mergeType: "MERGE_ALL"
-      }
-    },
-    {
-      mergeCells: {
-        range: {
-          sheetId: sheetIdNumber,
-          startRowIndex: 1,
-          endRowIndex: 2,
-          startColumnIndex: 0,
-          endColumnIndex: 13
-        },
-        mergeType: "MERGE_ALL"
-      }
-    },
     {
       repeatCell: {
         range: {
@@ -849,30 +790,6 @@ async function aplicarVisualDashboard(
   await resetSheetVisualState(sheets, spreadsheetId, sheetIdNumber, 10, Math.max(totalRows + 30, 300));
 
   const requests = [
-    {
-      mergeCells: {
-        range: {
-          sheetId: sheetIdNumber,
-          startRowIndex: 0,
-          endRowIndex: 1,
-          startColumnIndex: 0,
-          endColumnIndex: 5
-        },
-        mergeType: "MERGE_ALL"
-      }
-    },
-    {
-      mergeCells: {
-        range: {
-          sheetId: sheetIdNumber,
-          startRowIndex: 1,
-          endRowIndex: 2,
-          startColumnIndex: 0,
-          endColumnIndex: 5
-        },
-        mergeType: "MERGE_ALL"
-      }
-    },
     {
       repeatCell: {
         range: {
