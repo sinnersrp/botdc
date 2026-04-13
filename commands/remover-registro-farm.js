@@ -2,6 +2,7 @@ const { SlashCommandBuilder } = require("discord.js");
 const FarmRegistro = require("../models/FarmRegistro");
 const { isGerenteOuLider } = require("../utils/permissoes");
 const logAjuste = require("../utils/logAjuste");
+const { sincronizarPlanilhaFarm } = require("../utils/googleSheetsFarm");
 
 function formatMoney(value) {
   const numero = Number(value) || 0;
@@ -75,6 +76,10 @@ module.exports = {
       acao: "remover registro",
       valor: dadosRegistro.valor,
       motivo: `${motivo} | Registro removido: ${id}`
+    });
+
+    await sincronizarPlanilhaFarm(interaction.guild).catch((error) => {
+      console.error("Erro ao sincronizar planilha após remover registro:", error);
     });
 
     return interaction.editReply({

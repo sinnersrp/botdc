@@ -6,6 +6,7 @@ const path = require("path");
 const { iniciarFarmScheduler } = require("./tasks/farmScheduler");
 const { iniciarAvisoScheduler } = require("./tasks/avisoScheduler");
 const { processarSaidaOuRetorno } = require("./utils/saidaMembro");
+const { sincronizarPlanilhaFarm } = require("./utils/googleSheetsFarm");
 
 const {
   REGISTRO_BUTTON_ID,
@@ -77,7 +78,8 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.DirectMessages
   ]
 });
 
@@ -101,6 +103,20 @@ client.once("clientReady", async () => {
   console.log(`✅ Bot online como ${client.user.tag}`);
   iniciarFarmScheduler(client);
   iniciarAvisoScheduler(client);
+
+  try {
+    const guildId = process.env.GUILD_ID;
+    const guild = guildId
+      ? await client.guilds.fetch(guildId).catch(() => null)
+      : client.guilds.cache.first() || null;
+
+    if (guild) {
+      await sincronizarPlanilhaFarm(guild);
+      console.log("✅ Planilha do farm sincronizada na inicialização.");
+    }
+  } catch (error) {
+    console.error("Erro ao sincronizar planilha na inicialização:", error);
+  }
 });
 
 client.on("guildMemberUpdate", async (oldMember, newMember) => {

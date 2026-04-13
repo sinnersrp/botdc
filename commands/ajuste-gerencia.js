@@ -11,6 +11,7 @@ const { itensGerais, itensArmas } = require("../config/config");
 const { isGerenteOuLider } = require("../utils/permissoes");
 const getSemanaRP = require("../utils/semanaRP");
 const logAjuste = require("../utils/logAjuste");
+const { sincronizarPlanilhaFarm } = require("../utils/googleSheetsFarm");
 
 const opcoesItens = [
   { name: "📦 Maconha", value: "maconha" },
@@ -268,6 +269,10 @@ async function confirmarAjusteFarm(interaction, client) {
     acao: dados.acao,
     valor: Math.abs(dados.valor),
     motivo: dados.motivo
+  });
+
+  await sincronizarPlanilhaFarm(interaction.guild).catch((error) => {
+    console.error("Erro ao sincronizar planilha após ajuste de farm:", error);
   });
 
   return interaction.update({
