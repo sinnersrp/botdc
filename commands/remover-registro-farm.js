@@ -3,6 +3,7 @@ const FarmRegistro = require("../models/FarmRegistro");
 const { isGerenteOuLider } = require("../utils/permissoes");
 const logAjuste = require("../utils/logAjuste");
 const { sincronizarPlanilhaFarm } = require("../utils/googleSheetsFarm");
+const { sincronizarCaixaFaccao } = require("../utils/financeiroFaccao");
 
 function formatMoney(value) {
   const numero = Number(value) || 0;
@@ -11,8 +12,8 @@ function formatMoney(value) {
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName("remover-registro-farm")
-    .setDescription("Remove um registro específico de farm pelo ID")
+    .setName("remover-registro-dinheiro-sujo")
+    .setDescription("Remove um registro específico de dinheiro sujo pelo ID")
     .addStringOption(option =>
       option
         .setName("id")
@@ -70,12 +71,16 @@ module.exports = {
     );
 
     await logAjuste(client, {
-      tipo: "Remoção de registro de farm",
+      tipo: "Remoção de registro de dinheiro sujo",
       responsavel: interaction.user.tag,
       alvo: `${dadosRegistro.username} (${dadosRegistro.userId})`,
       acao: "remover registro",
       valor: dadosRegistro.valor,
       motivo: `${motivo} | Registro removido: ${id}`
+    });
+
+    await sincronizarCaixaFaccao().catch((error) => {
+      console.error("Erro ao sincronizar caixa após remover registro:", error);
     });
 
     await sincronizarPlanilhaFarm(interaction.guild).catch((error) => {
@@ -84,12 +89,12 @@ module.exports = {
 
     return interaction.editReply({
       content: [
-        "✅ Registro de farm removido com sucesso.",
+        "✅ Registro de dinheiro sujo removido com sucesso.",
         `👤 Usuário: **${dadosRegistro.username}**`,
         `🆔 Registro removido: \`${id}\``,
-        `💰 Valor removido: **${formatMoney(dadosRegistro.valor)}**`,
+        `💰 Valor removido: **R$ ${formatMoney(dadosRegistro.valor)}**`,
         `🗓️ Semana: **${dadosRegistro.semanaId}**`,
-        `📊 Total atual da semana: **${formatMoney(totalAtual)}**`
+        `📊 Total atual da semana: **R$ ${formatMoney(totalAtual)}**`
       ].join("\n")
     });
   }

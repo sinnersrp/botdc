@@ -11,6 +11,7 @@ const FarmRegistro = require("../models/FarmRegistro");
 const FarmPendente = require("../models/FarmPendente");
 const getSemanaRP = require("./semanaRP");
 const { sincronizarPlanilhaFarm } = require("./googleSheetsFarm");
+const { sincronizarCaixaFaccao } = require("./financeiroFaccao");
 
 const FARM_BUTTON_REGISTRAR = "farm_registrar";
 const FARM_MODAL_REGISTRAR = "farm_modal_registrar";
@@ -23,13 +24,13 @@ function formatMoney(value) {
 function criarPainelFarm() {
   const embed = new EmbedBuilder()
     .setColor(0x8e44ad)
-    .setTitle("💸 Painel de Farm")
+    .setTitle("💸 Painel de Dinheiro Sujo")
     .setDescription(
       [
-        "Use este painel para registrar seu farm semanal.",
+        "Use este painel para registrar seu dinheiro sujo semanal.",
         "",
         "**Como funciona:**",
-        "• clique em **Registrar farm**",
+        "• clique em **Registrar dinheiro sujo**",
         "• informe o valor",
         "• depois envie a **foto do comprovante** no canal",
         "",
@@ -37,14 +38,14 @@ function criarPainelFarm() {
       ].join("\n")
     )
     .setFooter({
-      text: "SINNERS BOT • Farm"
+      text: "SINNERS BOT • Dinheiro sujo"
     })
     .setTimestamp();
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(FARM_BUTTON_REGISTRAR)
-      .setLabel("Registrar farm")
+      .setLabel("Registrar dinheiro sujo")
       .setEmoji("💸")
       .setStyle(ButtonStyle.Success)
   );
@@ -58,11 +59,11 @@ function criarPainelFarm() {
 function criarModalFarm() {
   const modal = new ModalBuilder()
     .setCustomId(FARM_MODAL_REGISTRAR)
-    .setTitle("Registrar farm semanal");
+    .setTitle("Registrar dinheiro sujo");
 
   const valor = new TextInputBuilder()
     .setCustomId("valor")
-    .setLabel("Valor do farm")
+    .setLabel("Valor do dinheiro sujo")
     .setPlaceholder("Ex: 100000")
     .setStyle(TextInputStyle.Short)
     .setRequired(true)
@@ -103,13 +104,13 @@ async function processarModalFarm(interaction) {
   return interaction.reply({
     content: [
       "📸 Agora envie a **foto do comprovante** neste canal para concluir o registro.",
-      `💰 Valor informado: **${formatMoney(valor)}**`
+      `💰 Valor informado: **R$ ${formatMoney(valor)}**`
     ].join("\n"),
     flags: 64
   });
 }
 
-async function processarMensagemComprovanteFarm(message, client) {
+async function processarMensagemComprovanteFarm(message) {
   if (!message.guild) return;
   if (message.author.bot) return;
   if (!message.attachments || !message.attachments.size) return;
@@ -123,7 +124,6 @@ async function processarMensagemComprovanteFarm(message, client) {
 
   const anexo = message.attachments.first();
   const { semanaId } = getSemanaRP();
-
   const cargo = "membro";
 
   await FarmRegistro.create({
@@ -149,18 +149,26 @@ async function processarMensagemComprovanteFarm(message, client) {
   const excedente = Math.max(0, totalSemana - META_SEMANAL);
   const valorLimpo = Math.floor(excedente * 0.5);
 
+  await sincronizarCaixaFaccao().catch((error) => {
+    console.error("Erro ao sincronizar caixa após registro:", error);
+  });
+
+  await sincronizarPlanilhaFarm(message.guild).catch((error) => {
+    console.error("Erro ao sincronizar planilha após registro:", error);
+  });
+
   const embed = new EmbedBuilder()
     .setColor(0x57f287)
-    .setTitle("✅ Farm registrado com sucesso")
+    .setTitle("✅ Dinheiro sujo registrado com sucesso")
     .addFields(
       {
         name: "💰 Valor enviado",
-        value: `**${formatMoney(pendente.valor)}**`,
+        value: `**R$ ${formatMoney(pendente.valor)}**`,
         inline: true
       },
       {
         name: "📊 Total da semana",
-        value: `**${formatMoney(totalSemana)}**`,
+        value: `**R$ ${formatMoney(totalSemana)}**`,
         inline: true
       },
       {
@@ -170,18 +178,18 @@ async function processarMensagemComprovanteFarm(message, client) {
       },
       {
         name: "📈 Excedente",
-        value: `**${formatMoney(excedente)}**`,
+        value: `**R$ ${formatMoney(excedente)}**`,
         inline: true
       },
       {
-        name: "💵 Valor limpo estimado",
-        value: `**${formatMoney(valorLimpo)}**`,
+        name: "🧼 Valor limpo estimado",
+        value: `**R$ ${formatMoney(valorLimpo)}**`,
         inline: true
       }
     )
     .setImage(anexo?.url || null)
     .setFooter({
-      text: "SINNERS BOT • Farm"
+      text: "SINNERS BOT • Dinheiro sujo"
     })
     .setTimestamp();
 
@@ -190,10 +198,6 @@ async function processarMensagemComprovanteFarm(message, client) {
   });
 
   await FarmPendente.deleteOne({ _id: pendente._id });
-
-  await sincronizarPlanilhaFarm(message.guild).catch((error) => {
-    console.error("Erro ao sincronizar planilha após registro de farm:", error);
-  });
 }
 
 module.exports = {

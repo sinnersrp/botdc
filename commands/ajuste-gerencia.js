@@ -12,6 +12,7 @@ const { isGerenteOuLider } = require("../utils/permissoes");
 const getSemanaRP = require("../utils/semanaRP");
 const logAjuste = require("../utils/logAjuste");
 const { sincronizarPlanilhaFarm } = require("../utils/googleSheetsFarm");
+const { sincronizarCaixaFaccao } = require("../utils/financeiroFaccao");
 
 const opcoesItens = [
   { name: "📦 Maconha", value: "maconha" },
@@ -165,7 +166,7 @@ async function prepararAjusteFarm(interaction) {
 
   const embed = new EmbedBuilder()
     .setColor(0xf1c40f)
-    .setTitle("🛠️ Confirmar ajuste de farm")
+    .setTitle("🛠️ Confirmar ajuste de dinheiro sujo")
     .addFields(
       {
         name: "👤 Membro",
@@ -174,7 +175,7 @@ async function prepararAjusteFarm(interaction) {
       },
       {
         name: "📊 Total atual",
-        value: `**${formatMoney(totalAtual)}**`,
+        value: `**R$ ${formatMoney(totalAtual)}**`,
         inline: true
       },
       {
@@ -184,12 +185,12 @@ async function prepararAjusteFarm(interaction) {
       },
       {
         name: "💰 Valor do ajuste",
-        value: `**${formatMoney(valor)}**`,
+        value: `**R$ ${formatMoney(valor)}**`,
         inline: true
       },
       {
         name: "📈 Total após ajuste",
-        value: `**${formatMoney(totalDepois)}**`,
+        value: `**R$ ${formatMoney(totalDepois)}**`,
         inline: true
       },
       {
@@ -263,7 +264,7 @@ async function confirmarAjusteFarm(interaction, client) {
   const totalSemana = registros.reduce((acc, item) => acc + (Number(item.valor) || 0), 0);
 
   await logAjuste(client, {
-    tipo: "Ajuste de farm",
+    tipo: "Ajuste de dinheiro sujo",
     responsavel: interaction.user.tag,
     alvo: `${user.username} (${user.id})`,
     acao: dados.acao,
@@ -271,17 +272,21 @@ async function confirmarAjusteFarm(interaction, client) {
     motivo: dados.motivo
   });
 
+  await sincronizarCaixaFaccao().catch((error) => {
+    console.error("Erro ao sincronizar caixa após ajuste:", error);
+  });
+
   await sincronizarPlanilhaFarm(interaction.guild).catch((error) => {
-    console.error("Erro ao sincronizar planilha após ajuste de farm:", error);
+    console.error("Erro ao sincronizar planilha após ajuste:", error);
   });
 
   return interaction.update({
     content: [
-      "✅ Ajuste de farm confirmado.",
+      "✅ Ajuste de dinheiro sujo confirmado.",
       `👤 Usuário: **${user.username}**`,
       `⚙️ Ação: **${dados.acao}**`,
-      `💰 Valor ajustado: **${formatMoney(Math.abs(dados.valor))}**`,
-      `📊 Total atual da semana: **${formatMoney(totalSemana)}**`
+      `💰 Valor ajustado: **R$ ${formatMoney(Math.abs(dados.valor))}**`,
+      `📊 Total atual da semana: **R$ ${formatMoney(totalSemana)}**`
     ].join("\n"),
     embeds: [],
     components: []
@@ -294,8 +299,8 @@ module.exports = {
     .setDescription("Ajustes manuais da gerência")
     .addSubcommand(subcommand =>
       subcommand
-        .setName("farm")
-        .setDescription("Ajustar farm de um membro")
+        .setName("dinheiro-sujo")
+        .setDescription("Ajustar dinheiro sujo de um membro")
         .addUserOption(option =>
           option.setName("usuario").setDescription("Membro que receberá o ajuste").setRequired(true)
         )
@@ -366,7 +371,7 @@ module.exports = {
 
     const subcommand = interaction.options.getSubcommand();
 
-    if (subcommand === "farm") {
+    if (subcommand === "dinheiro-sujo") {
       return prepararAjusteFarm(interaction);
     }
 
