@@ -60,10 +60,10 @@ function extrairNomeEPassaporte(nomeCanal = "") {
 }
 
 async function getGoogleSheetsClient() {
-  const sheetId = process.env.GOOGLE_SHEETS_ID;
+  const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
   const serviceFile = process.env.GOOGLE_SERVICE_ACCOUNT_FILE;
 
-  if (!sheetId) {
+  if (!spreadsheetId) {
     throw new Error("GOOGLE_SHEETS_ID não configurado no .env");
   }
 
@@ -86,20 +86,20 @@ async function getGoogleSheetsClient() {
 
   return {
     sheets,
-    sheetId
+    spreadsheetId
   };
 }
 
-async function getSpreadsheetInfo(sheets, sheetId) {
+async function getSpreadsheetInfo(sheets, spreadsheetId) {
   const response = await sheets.spreadsheets.get({
-    spreadsheetId: sheetId
+    spreadsheetId
   });
 
   return response.data;
 }
 
-async function ensureSheetExists(sheets, sheetId, title) {
-  const info = await getSpreadsheetInfo(sheets, sheetId);
+async function ensureSheetExists(sheets, spreadsheetId, title) {
+  const info = await getSpreadsheetInfo(sheets, spreadsheetId);
   const existing = info.sheets?.find((sheet) => sheet.properties?.title === title);
 
   if (existing) {
@@ -107,7 +107,7 @@ async function ensureSheetExists(sheets, sheetId, title) {
   }
 
   await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: sheetId,
+    spreadsheetId,
     requestBody: {
       requests: [
         {
@@ -121,28 +121,58 @@ async function ensureSheetExists(sheets, sheetId, title) {
     }
   });
 
-  const updatedInfo = await getSpreadsheetInfo(sheets, sheetId);
+  const updatedInfo = await getSpreadsheetInfo(sheets, spreadsheetId);
   const created = updatedInfo.sheets?.find((sheet) => sheet.properties?.title === title);
 
   return created?.properties?.sheetId;
 }
 
-async function clearSheet(sheets, sheetId, title) {
+async function clearSheet(sheets, spreadsheetId, title) {
   await sheets.spreadsheets.values.clear({
-    spreadsheetId: sheetId,
+    spreadsheetId,
     range: `${title}!A:Z`
   });
 }
 
-async function writeSheet(sheets, sheetId, title, rows) {
+async function writeSheet(sheets, spreadsheetId, title, rows) {
   await sheets.spreadsheets.values.update({
-    spreadsheetId: sheetId,
+    spreadsheetId,
     range: `${title}!A1`,
     valueInputOption: "USER_ENTERED",
     requestBody: {
       values: rows
     }
   });
+}
+
+async function resetSheetVisualState(sheets, spreadsheetId, sheetIdNumber, maxColumns = 26, maxRows = 2000) {
+  const requests = [
+    {
+      clearBasicFilter: {
+        sheetId: sheetIdNumber
+      }
+    },
+    {
+      unmergeCells: {
+        range: {
+          sheetId: sheetIdNumber,
+          startRowIndex: 0,
+          endRowIndex: maxRows,
+          startColumnIndex: 0,
+          endColumnIndex: maxColumns
+        }
+      }
+    }
+  ];
+
+  try {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: { requests }
+    });
+  } catch (error) {
+    // Ignora erros caso não existam merges/filtros anteriores
+  }
 }
 
 async function montarMapaMembros(guild) {
@@ -400,37 +430,17 @@ async function limparGraficosDaAba(sheets, spreadsheetId, title) {
 }
 
 async function aplicarVisualSemana(sheets, spreadsheetId, title, sheetIdNumber, totalRows) {
+  await resetSheetVisualState(sheets, spreadsheetId, sheetIdNumber, 10, Math.max(totalRows + 20, 200));
+
   const requests = [
     {
-      mergeCells: {
+      repeatCell: {
         range: {
           sheetId: sheetIdNumber,
           startRowIndex: 0,
           endRowIndex: 1,
           startColumnIndex: 0,
           endColumnIndex: 10
-        },
-        mergeType: "MERGE_ALL"
-      }
-    },
-    {
-      mergeCells: {
-        range: {
-          sheetId: sheetIdNumber,
-          startRowIndex: 1,
-          endRowIndex: 2,
-          startColumnIndex: 0,
-          endColumnIndex: 10
-        },
-        mergeType: "MERGE_ALL"
-      }
-    },
-    {
-      repeatCell: {
-        range: {
-          sheetId: sheetIdNumber,
-          startRowIndex: 0,
-          endRowIndex: 1
         },
         cell: {
           userEnteredFormat: {
@@ -451,7 +461,9 @@ async function aplicarVisualSemana(sheets, spreadsheetId, title, sheetIdNumber, 
         range: {
           sheetId: sheetIdNumber,
           startRowIndex: 1,
-          endRowIndex: 2
+          endRowIndex: 2,
+          startColumnIndex: 0,
+          endColumnIndex: 10
         },
         cell: {
           userEnteredFormat: {
@@ -472,7 +484,9 @@ async function aplicarVisualSemana(sheets, spreadsheetId, title, sheetIdNumber, 
         range: {
           sheetId: sheetIdNumber,
           startRowIndex: 3,
-          endRowIndex: 4
+          endRowIndex: 4,
+          startColumnIndex: 0,
+          endColumnIndex: 10
         },
         cell: {
           userEnteredFormat: {
@@ -490,7 +504,9 @@ async function aplicarVisualSemana(sheets, spreadsheetId, title, sheetIdNumber, 
         range: {
           sheetId: sheetIdNumber,
           startRowIndex: 5,
-          endRowIndex: 6
+          endRowIndex: 6,
+          startColumnIndex: 0,
+          endColumnIndex: 10
         },
         cell: {
           userEnteredFormat: {
@@ -568,37 +584,17 @@ async function aplicarVisualSemana(sheets, spreadsheetId, title, sheetIdNumber, 
 }
 
 async function aplicarVisualResumo(sheets, spreadsheetId, title, sheetIdNumber, totalRows) {
+  await resetSheetVisualState(sheets, spreadsheetId, sheetIdNumber, 13, Math.max(totalRows + 20, 200));
+
   const requests = [
     {
-      mergeCells: {
+      repeatCell: {
         range: {
           sheetId: sheetIdNumber,
           startRowIndex: 0,
           endRowIndex: 1,
           startColumnIndex: 0,
           endColumnIndex: 13
-        },
-        mergeType: "MERGE_ALL"
-      }
-    },
-    {
-      mergeCells: {
-        range: {
-          sheetId: sheetIdNumber,
-          startRowIndex: 1,
-          endRowIndex: 2,
-          startColumnIndex: 0,
-          endColumnIndex: 13
-        },
-        mergeType: "MERGE_ALL"
-      }
-    },
-    {
-      repeatCell: {
-        range: {
-          sheetId: sheetIdNumber,
-          startRowIndex: 0,
-          endRowIndex: 1
         },
         cell: {
           userEnteredFormat: {
@@ -619,7 +615,9 @@ async function aplicarVisualResumo(sheets, spreadsheetId, title, sheetIdNumber, 
         range: {
           sheetId: sheetIdNumber,
           startRowIndex: 1,
-          endRowIndex: 2
+          endRowIndex: 2,
+          startColumnIndex: 0,
+          endColumnIndex: 13
         },
         cell: {
           userEnteredFormat: {
@@ -640,7 +638,9 @@ async function aplicarVisualResumo(sheets, spreadsheetId, title, sheetIdNumber, 
         range: {
           sheetId: sheetIdNumber,
           startRowIndex: 3,
-          endRowIndex: 4
+          endRowIndex: 4,
+          startColumnIndex: 0,
+          endColumnIndex: 13
         },
         cell: {
           userEnteredFormat: {
@@ -658,7 +658,9 @@ async function aplicarVisualResumo(sheets, spreadsheetId, title, sheetIdNumber, 
         range: {
           sheetId: sheetIdNumber,
           startRowIndex: 5,
-          endRowIndex: 6
+          endRowIndex: 6,
+          startColumnIndex: 0,
+          endColumnIndex: 13
         },
         cell: {
           userEnteredFormat: {
@@ -799,38 +801,17 @@ async function aplicarVisualDashboard(
   statusFim
 ) {
   await limparGraficosDaAba(sheets, spreadsheetId, title);
+  await resetSheetVisualState(sheets, spreadsheetId, sheetIdNumber, 10, Math.max(totalRows + 30, 300));
 
   const requests = [
     {
-      mergeCells: {
+      repeatCell: {
         range: {
           sheetId: sheetIdNumber,
           startRowIndex: 0,
           endRowIndex: 1,
           startColumnIndex: 0,
           endColumnIndex: 5
-        },
-        mergeType: "MERGE_ALL"
-      }
-    },
-    {
-      mergeCells: {
-        range: {
-          sheetId: sheetIdNumber,
-          startRowIndex: 1,
-          endRowIndex: 2,
-          startColumnIndex: 0,
-          endColumnIndex: 5
-        },
-        mergeType: "MERGE_ALL"
-      }
-    },
-    {
-      repeatCell: {
-        range: {
-          sheetId: sheetIdNumber,
-          startRowIndex: 0,
-          endRowIndex: 1
         },
         cell: {
           userEnteredFormat: {
@@ -851,7 +832,9 @@ async function aplicarVisualDashboard(
         range: {
           sheetId: sheetIdNumber,
           startRowIndex: 1,
-          endRowIndex: 2
+          endRowIndex: 2,
+          startColumnIndex: 0,
+          endColumnIndex: 5
         },
         cell: {
           userEnteredFormat: {
@@ -872,7 +855,9 @@ async function aplicarVisualDashboard(
         range: {
           sheetId: sheetIdNumber,
           startRowIndex: 3,
-          endRowIndex: 5
+          endRowIndex: 5,
+          startColumnIndex: 0,
+          endColumnIndex: 5
         },
         cell: {
           userEnteredFormat: {
@@ -888,7 +873,9 @@ async function aplicarVisualDashboard(
         range: {
           sheetId: sheetIdNumber,
           startRowIndex: tabelaInicio - 1,
-          endRowIndex: tabelaInicio
+          endRowIndex: tabelaInicio,
+          startColumnIndex: 0,
+          endColumnIndex: 5
         },
         cell: {
           userEnteredFormat: {
@@ -908,7 +895,7 @@ async function aplicarVisualDashboard(
         range: {
           sheetId: sheetIdNumber,
           startRowIndex: tabelaInicio,
-          endRowIndex: Math.max(tabelaFim, tabelaInicio + 1),
+          endRowIndex: Math.max(tabelaFim + 1, tabelaInicio + 1),
           startColumnIndex: 2,
           endColumnIndex: 4
         },
@@ -930,7 +917,7 @@ async function aplicarVisualDashboard(
             {
               sheetId: sheetIdNumber,
               startRowIndex: tabelaInicio,
-              endRowIndex: Math.max(tabelaFim, tabelaInicio + 1),
+              endRowIndex: Math.max(tabelaFim + 1, tabelaInicio + 1),
               startColumnIndex: 4,
               endColumnIndex: 5
             }
@@ -956,7 +943,7 @@ async function aplicarVisualDashboard(
             {
               sheetId: sheetIdNumber,
               startRowIndex: tabelaInicio,
-              endRowIndex: Math.max(tabelaFim, tabelaInicio + 1),
+              endRowIndex: Math.max(tabelaFim + 1, tabelaInicio + 1),
               startColumnIndex: 4,
               endColumnIndex: 5
             }
@@ -1149,13 +1136,17 @@ async function removerAbaPadraoVazia(sheets, spreadsheetId) {
 
     if (abaProtegida) continue;
 
-    const values = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `${title}!A1:Z10`
-    }).catch(() => null);
+    const values = await sheets.spreadsheets.values
+      .get({
+        spreadsheetId,
+        range: `${title}!A1:Z10`
+      })
+      .catch(() => null);
 
     const linhas = values?.data?.values || [];
-    const temConteudo = linhas.some((linha) => linha.some((celula) => String(celula).trim() !== ""));
+    const temConteudo = linhas.some((linha) =>
+      linha.some((celula) => String(celula).trim() !== "")
+    );
 
     if (!temConteudo && typeof sheetIdNumber === "number") {
       await sheets.spreadsheets.batchUpdate({
@@ -1176,7 +1167,7 @@ async function removerAbaPadraoVazia(sheets, spreadsheetId) {
 }
 
 async function sincronizarPlanilhaFarm(guild) {
-  const { sheets, sheetId } = await getGoogleSheetsClient();
+  const { sheets, spreadsheetId } = await getGoogleSheetsClient();
   const memberMap = await montarMapaMembros(guild);
   const registros = await FarmRegistro.find({}).sort({ registradoEm: 1 });
   const resumo = agruparResumoPorSemanaEMembro(registros, memberMap);
@@ -1184,17 +1175,17 @@ async function sincronizarPlanilhaFarm(guild) {
   const semanas = [...new Set(registros.map((r) => r.semanaId))].sort();
   const semanaAtualId = semanas.length ? semanas[semanas.length - 1] : null;
 
-  const dashboardSheetId = await ensureSheetExists(sheets, sheetId, "Dashboard");
-  const resumoSheetId = await ensureSheetExists(sheets, sheetId, "Resumo Geral");
+  const dashboardSheetId = await ensureSheetExists(sheets, spreadsheetId, "Dashboard");
+  const resumoSheetId = await ensureSheetExists(sheets, spreadsheetId, "Resumo Geral");
 
   if (semanaAtualId) {
     const dashboard = montarLinhasDashboard(resumo, semanaAtualId);
 
-    await clearSheet(sheets, sheetId, "Dashboard");
-    await writeSheet(sheets, sheetId, "Dashboard", dashboard.rows);
+    await clearSheet(sheets, spreadsheetId, "Dashboard");
+    await writeSheet(sheets, spreadsheetId, "Dashboard", dashboard.rows);
     await aplicarVisualDashboard(
       sheets,
-      sheetId,
+      spreadsheetId,
       "Dashboard",
       dashboardSheetId,
       dashboard.rows.length,
@@ -1206,11 +1197,11 @@ async function sincronizarPlanilhaFarm(guild) {
   }
 
   const resumoRows = montarLinhasResumoGeral(resumo);
-  await clearSheet(sheets, sheetId, "Resumo Geral");
-  await writeSheet(sheets, sheetId, "Resumo Geral", resumoRows);
+  await clearSheet(sheets, spreadsheetId, "Resumo Geral");
+  await writeSheet(sheets, spreadsheetId, "Resumo Geral", resumoRows);
   await aplicarVisualResumo(
     sheets,
-    sheetId,
+    spreadsheetId,
     "Resumo Geral",
     resumoSheetId,
     resumoRows.length
@@ -1218,27 +1209,27 @@ async function sincronizarPlanilhaFarm(guild) {
 
   for (const semanaId of semanas) {
     const title = getSheetWeekName(semanaId);
-    const sheetWeekId = await ensureSheetExists(sheets, sheetId, title);
+    const sheetWeekId = await ensureSheetExists(sheets, spreadsheetId, title);
     const registrosSemana = registros.filter((r) => r.semanaId === semanaId);
     const rows = montarLinhasSemana(registrosSemana, memberMap, semanaId);
 
-    await clearSheet(sheets, sheetId, title);
-    await writeSheet(sheets, sheetId, title, rows);
+    await clearSheet(sheets, spreadsheetId, title);
+    await writeSheet(sheets, spreadsheetId, title, rows);
     await aplicarVisualSemana(
       sheets,
-      sheetId,
+      spreadsheetId,
       title,
       sheetWeekId,
       rows.length
     );
   }
 
-  await removerAbaPadraoVazia(sheets, sheetId);
+  await removerAbaPadraoVazia(sheets, spreadsheetId);
 
   return {
     totalRegistros: registros.length,
     totalSemanas: semanas.length,
-    link: `https://docs.google.com/spreadsheets/d/${sheetId}/edit`
+    link: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`
   };
 }
 
