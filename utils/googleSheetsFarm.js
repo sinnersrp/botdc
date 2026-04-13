@@ -171,7 +171,7 @@ async function resetSheetVisualState(sheets, spreadsheetId, sheetIdNumber, maxCo
       requestBody: { requests }
     });
   } catch (error) {
-    // Ignora erros caso não existam merges/filtros anteriores
+    // ignora se não houver filtro/merge
   }
 }
 
@@ -553,19 +553,6 @@ async function aplicarVisualSemana(sheets, spreadsheetId, title, sheetIdNumber, 
       }
     },
     {
-      setBasicFilter: {
-        filter: {
-          range: {
-            sheetId: sheetIdNumber,
-            startRowIndex: 5,
-            endRowIndex: Math.max(totalRows, 6),
-            startColumnIndex: 0,
-            endColumnIndex: 10
-          }
-        }
-      }
-    },
-    {
       autoResizeDimensions: {
         dimensions: {
           sheetId: sheetIdNumber,
@@ -756,19 +743,6 @@ async function aplicarVisualResumo(sheets, spreadsheetId, title, sheetIdNumber, 
           }
         },
         fields: "gridProperties.frozenRowCount"
-      }
-    },
-    {
-      setBasicFilter: {
-        filter: {
-          range: {
-            sheetId: sheetIdNumber,
-            startRowIndex: 5,
-            endRowIndex: Math.max(totalRows, 6),
-            startColumnIndex: 0,
-            endColumnIndex: 13
-          }
-        }
       }
     },
     {
@@ -994,14 +968,8 @@ async function aplicarVisualDashboard(
             basicChart: {
               chartType: "COLUMN",
               axis: [
-                {
-                  position: "BOTTOM_AXIS",
-                  title: "Membros"
-                },
-                {
-                  position: "LEFT_AXIS",
-                  title: "Total"
-                }
+                { position: "BOTTOM_AXIS", title: "Membros" },
+                { position: "LEFT_AXIS", title: "Total" }
               ],
               domains: [
                 {
