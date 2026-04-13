@@ -171,7 +171,7 @@ async function resetSheetVisualState(sheets, spreadsheetId, sheetIdNumber, maxCo
       requestBody: { requests }
     });
   } catch (error) {
-    // ignora se não houver filtro/merge
+    // ignora se não houver filtro ou merge
   }
 }
 
@@ -271,12 +271,13 @@ function montarLinhasSemana(registros, memberMap, semanaId) {
   const totalSemana = registros.reduce((acc, r) => acc + (Number(r.valor) || 0), 0);
   const qtdRegistros = registros.length;
   const qtdAjustes = registros.filter((r) => r.cargo === "ajuste").length;
+  const membrosAtivos = new Set(registros.map((r) => r.userId)).size;
 
   const rows = [
     ["💸 RELATÓRIO SEMANAL DO FARM"],
     [getSheetWeekName(semanaId)],
     [],
-    ["Total da semana", totalSemana, "Registros", qtdRegistros, "Ajustes", qtdAjustes],
+    ["Total da semana", totalSemana, "Registros", qtdRegistros, "Ajustes", qtdAjustes, "Membros ativos", membrosAtivos],
     [],
     [
       "Data",
@@ -434,6 +435,30 @@ async function aplicarVisualSemana(sheets, spreadsheetId, title, sheetIdNumber, 
 
   const requests = [
     {
+      mergeCells: {
+        range: {
+          sheetId: sheetIdNumber,
+          startRowIndex: 0,
+          endRowIndex: 1,
+          startColumnIndex: 0,
+          endColumnIndex: 10
+        },
+        mergeType: "MERGE_ALL"
+      }
+    },
+    {
+      mergeCells: {
+        range: {
+          sheetId: sheetIdNumber,
+          startRowIndex: 1,
+          endRowIndex: 2,
+          startColumnIndex: 0,
+          endColumnIndex: 10
+        },
+        mergeType: "MERGE_ALL"
+      }
+    },
+    {
       repeatCell: {
         range: {
           sheetId: sheetIdNumber,
@@ -491,9 +516,7 @@ async function aplicarVisualSemana(sheets, spreadsheetId, title, sheetIdNumber, 
         cell: {
           userEnteredFormat: {
             backgroundColor: { red: 0.95, green: 0.95, blue: 0.98 },
-            textFormat: {
-              bold: true
-            }
+            textFormat: { bold: true }
           }
         },
         fields: "userEnteredFormat(backgroundColor,textFormat)"
@@ -534,7 +557,7 @@ async function aplicarVisualSemana(sheets, spreadsheetId, title, sheetIdNumber, 
           userEnteredFormat: {
             numberFormat: {
               type: "CURRENCY",
-              pattern: "R$ #,##0"
+              pattern: "R$ #,##0.00"
             }
           }
         },
@@ -550,6 +573,19 @@ async function aplicarVisualSemana(sheets, spreadsheetId, title, sheetIdNumber, 
           }
         },
         fields: "gridProperties.frozenRowCount"
+      }
+    },
+    {
+      setBasicFilter: {
+        filter: {
+          range: {
+            sheetId: sheetIdNumber,
+            startRowIndex: 5,
+            endRowIndex: Math.max(totalRows, 6),
+            startColumnIndex: 0,
+            endColumnIndex: 10
+          }
+        }
       }
     },
     {
@@ -574,6 +610,30 @@ async function aplicarVisualResumo(sheets, spreadsheetId, title, sheetIdNumber, 
   await resetSheetVisualState(sheets, spreadsheetId, sheetIdNumber, 13, Math.max(totalRows + 20, 200));
 
   const requests = [
+    {
+      mergeCells: {
+        range: {
+          sheetId: sheetIdNumber,
+          startRowIndex: 0,
+          endRowIndex: 1,
+          startColumnIndex: 0,
+          endColumnIndex: 13
+        },
+        mergeType: "MERGE_ALL"
+      }
+    },
+    {
+      mergeCells: {
+        range: {
+          sheetId: sheetIdNumber,
+          startRowIndex: 1,
+          endRowIndex: 2,
+          startColumnIndex: 0,
+          endColumnIndex: 13
+        },
+        mergeType: "MERGE_ALL"
+      }
+    },
     {
       repeatCell: {
         range: {
@@ -632,9 +692,7 @@ async function aplicarVisualResumo(sheets, spreadsheetId, title, sheetIdNumber, 
         cell: {
           userEnteredFormat: {
             backgroundColor: { red: 0.95, green: 0.95, blue: 0.98 },
-            textFormat: {
-              bold: true
-            }
+            textFormat: { bold: true }
           }
         },
         fields: "userEnteredFormat(backgroundColor,textFormat)"
@@ -675,7 +733,7 @@ async function aplicarVisualResumo(sheets, spreadsheetId, title, sheetIdNumber, 
           userEnteredFormat: {
             numberFormat: {
               type: "CURRENCY",
-              pattern: "R$ #,##0"
+              pattern: "R$ #,##0.00"
             }
           }
         },
@@ -746,6 +804,19 @@ async function aplicarVisualResumo(sheets, spreadsheetId, title, sheetIdNumber, 
       }
     },
     {
+      setBasicFilter: {
+        filter: {
+          range: {
+            sheetId: sheetIdNumber,
+            startRowIndex: 5,
+            endRowIndex: Math.max(totalRows, 6),
+            startColumnIndex: 0,
+            endColumnIndex: 13
+          }
+        }
+      }
+    },
+    {
       autoResizeDimensions: {
         dimensions: {
           sheetId: sheetIdNumber,
@@ -778,6 +849,30 @@ async function aplicarVisualDashboard(
   await resetSheetVisualState(sheets, spreadsheetId, sheetIdNumber, 10, Math.max(totalRows + 30, 300));
 
   const requests = [
+    {
+      mergeCells: {
+        range: {
+          sheetId: sheetIdNumber,
+          startRowIndex: 0,
+          endRowIndex: 1,
+          startColumnIndex: 0,
+          endColumnIndex: 5
+        },
+        mergeType: "MERGE_ALL"
+      }
+    },
+    {
+      mergeCells: {
+        range: {
+          sheetId: sheetIdNumber,
+          startRowIndex: 1,
+          endRowIndex: 2,
+          startColumnIndex: 0,
+          endColumnIndex: 5
+        },
+        mergeType: "MERGE_ALL"
+      }
+    },
     {
       repeatCell: {
         range: {
@@ -877,7 +972,7 @@ async function aplicarVisualDashboard(
           userEnteredFormat: {
             numberFormat: {
               type: "CURRENCY",
-              pattern: "R$ #,##0"
+              pattern: "R$ #,##0.00"
             }
           }
         },
@@ -945,6 +1040,19 @@ async function aplicarVisualDashboard(
           }
         },
         fields: "gridProperties.frozenRowCount"
+      }
+    },
+    {
+      setBasicFilter: {
+        filter: {
+          range: {
+            sheetId: sheetIdNumber,
+            startRowIndex: tabelaInicio - 1,
+            endRowIndex: Math.max(tabelaFim + 1, tabelaInicio),
+            startColumnIndex: 0,
+            endColumnIndex: 5
+          }
+        }
       }
     },
     {
