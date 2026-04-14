@@ -13,6 +13,7 @@ const MovimentacaoBau = require("../models/MovimentacaoBau");
 const { podeUsarControleBau } = require("./permissoes");
 const { itensGerais, itensArmas } = require("../config/config");
 const { isForumComandoBot, criarLinkCanal } = require("./redirecionamentoForum");
+const { enviarLogBonito, criarCampo } = require("./logMovimentacaoBonita");
 
 const CONTROLE_BUTTON_LIBERAR = "controle_bau_liberar";
 const CONTROLE_BUTTON_RETIRAR = "controle_bau_retirar";
@@ -384,7 +385,7 @@ async function processarModalControleBau(interaction) {
   }
 
   const itemNormalizado = normalizarItem(item);
-  const tipo = getTipoItem(itemNormalizado);
+  const tipoItem = getTipoItem(itemNormalizado);
 
   let registro = await ControleBau.findOne({ item: itemNormalizado });
 
@@ -392,7 +393,7 @@ async function processarModalControleBau(interaction) {
     registro = new ControleBau({
       item: itemNormalizado,
       quantidade: 0,
-      tipo
+      tipo: tipoItem
     });
   }
 
@@ -424,7 +425,30 @@ async function processarModalControleBau(interaction) {
     tipoMovimentacao: acao,
     observacao,
     canalId: interaction.channelId,
+    canalNome: interaction.channel?.name || "canal-desconhecido",
+    tipo: "controle_bau",
+    acao: acao,
+    cargo: "membro",
     registradoEm: new Date()
+  });
+
+  await enviarLogBonito(interaction.client, {
+    color:
+      acao === "devolver" ? 0x5865f2 :
+      acao === "retirar" ? 0xed4245 :
+      0x57f287,
+    title:
+      acao === "liberar" ? "✅ Item liberado no Controle de Baú" :
+      acao === "retirar" ? "📤 Item retirado do Controle de Baú" :
+      "📥 Item devolvido ao Controle de Baú",
+    description: "Movimentação registrada no estoque liberado aos membros.",
+    fields: [
+      criarCampo("📦 Item", `**${formatarNomeBonito(itemNormalizado)}**`),
+      criarCampo("🔢 Quantidade", `**${formatarQuantidade(quantidade)}**`),
+      criarCampo("📊 Estoque atual", `**${formatarQuantidade(registro.quantidade)}**`),
+      criarCampo("👤 Responsável", `**${interaction.user.username}**`),
+      criarCampo("📝 Observação", observacao, false)
+    ]
   });
 
   const embed = new EmbedBuilder()

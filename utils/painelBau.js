@@ -13,7 +13,7 @@ const MovimentacaoBau = require("../models/MovimentacaoBau");
 const { podeUsarBauGerencia } = require("./permissoes");
 const { itensGerais, itensArmas } = require("../config/config");
 const { isForumComandoBot, criarLinkCanal } = require("./redirecionamentoForum");
-const { enviarLogBonito, criarCampo, formatNumber } = require("./logMovimentacaoBonita");
+const { enviarLogBonito, criarCampo } = require("./logMovimentacaoBonita");
 
 const BAU_BUTTON_ENTRADA = "bau_gerencia_entrada";
 const BAU_BUTTON_SAIDA = "bau_gerencia_saida";
@@ -389,7 +389,7 @@ async function processarModalBauGerencia(interaction, client) {
 
   const itemNormalizado = normalizarItem(item);
   const itemDb = getItemDb(itemNormalizado);
-  const tipo = getTipoItem(itemNormalizado);
+  const tipoItem = getTipoItem(itemNormalizado);
 
   let registroGerencia = await ControleBau.findOne({ item: itemDb });
 
@@ -397,7 +397,7 @@ async function processarModalBauGerencia(interaction, client) {
     registroGerencia = new ControleBau({
       item: itemDb,
       quantidade: 0,
-      tipo
+      tipo: tipoItem
     });
   }
 
@@ -418,9 +418,13 @@ async function processarModalBauGerencia(interaction, client) {
       item: itemDb,
       itemOriginal: itemNormalizado,
       quantidade,
-      tipoMovimentacao: acao,
+      tipoMovimentacao: "entrada",
       observacao,
       canalId: interaction.channelId,
+      canalNome: interaction.channel?.name || "canal-desconhecido",
+      tipo: "bau_gerencia",
+      acao: "entrada",
+      cargo: "gerencia",
       registradoEm: new Date()
     });
 
@@ -448,9 +452,13 @@ async function processarModalBauGerencia(interaction, client) {
       item: itemDb,
       itemOriginal: itemNormalizado,
       quantidade,
-      tipoMovimentacao: acao,
+      tipoMovimentacao: "saida",
       observacao,
       canalId: interaction.channelId,
+      canalNome: interaction.channel?.name || "canal-desconhecido",
+      tipo: "bau_gerencia",
+      acao: "saida",
+      cargo: "gerencia",
       registradoEm: new Date()
     });
 
@@ -478,7 +486,7 @@ async function processarModalBauGerencia(interaction, client) {
       registroControle = new ControleBau({
         item: itemNormalizado,
         quantidade: 0,
-        tipo
+        tipo: tipoItem
       });
     }
 
@@ -494,6 +502,10 @@ async function processarModalBauGerencia(interaction, client) {
       tipoMovimentacao: "transferencia_controle",
       observacao,
       canalId: interaction.channelId,
+      canalNome: interaction.channel?.name || "canal-desconhecido",
+      tipo: "bau_gerencia",
+      acao: "transferir",
+      cargo: "gerencia",
       registradoEm: new Date()
     });
 
@@ -505,6 +517,10 @@ async function processarModalBauGerencia(interaction, client) {
       tipoMovimentacao: "liberar",
       observacao: `TRANSFERIDO DA GERÊNCIA: ${observacao}`,
       canalId: interaction.channelId,
+      canalNome: interaction.channel?.name || "canal-desconhecido",
+      tipo: "controle_bau",
+      acao: "liberar",
+      cargo: "gerencia",
       registradoEm: new Date()
     });
 
