@@ -80,6 +80,7 @@ async function abrirModalFarm(interaction) {
 async function processarModalFarm(interaction) {
   const valorBruto = interaction.fields.getTextInputValue("valor").trim();
   const valor = Number(valorBruto.replace(/\./g, "").replace(",", "."));
+  const { semanaId } = getSemanaRP();
 
   if (!Number.isFinite(valor) || valor <= 0) {
     return interaction.reply({
@@ -90,21 +91,27 @@ async function processarModalFarm(interaction) {
 
   await FarmPendente.findOneAndDelete({
     userId: interaction.user.id,
-    channelId: interaction.channel.id
+    canalId: interaction.channel.id
   }).catch(() => null);
+
+  const agora = new Date();
+  const expiraEm = new Date(agora.getTime() + 10 * 60 * 1000);
 
   await FarmPendente.create({
     userId: interaction.user.id,
     username: interaction.user.username,
-    channelId: interaction.channel.id,
+    canalId: interaction.channel.id,
+    semanaId,
     valor,
-    criadoEm: new Date()
+    criadoEm: agora,
+    expiraEm
   });
 
   return interaction.reply({
     content: [
       "📸 Agora envie a **foto do comprovante** neste canal para concluir o registro.",
-      `💰 Valor informado: **R$ ${formatMoney(valor)}**`
+      `💰 Valor informado: **R$ ${formatMoney(valor)}**`,
+      "⏳ Esse registro pendente expira em **10 minutos**."
     ].join("\n"),
     flags: 64
   });
@@ -117,13 +124,13 @@ async function processarMensagemComprovanteFarm(message) {
 
   const pendente = await FarmPendente.findOne({
     userId: message.author.id,
-    channelId: message.channel.id
+    canalId: message.channel.id
   });
 
   if (!pendente) return;
 
   const anexo = message.attachments.first();
-  const { semanaId } = getSemanaRP();
+  const semanaId = pendente.semanaId;
   const cargo = "membro";
 
   await FarmRegistro.create({
