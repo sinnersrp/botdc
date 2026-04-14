@@ -26,8 +26,17 @@ const BAU_SELECT_TRANSFERIR = "bau_gerencia_select_transferir";
 
 const BAU_MODAL_PREFIX = "bau_gerencia_modal";
 
+// IDs que você passou
 const CANAL_BAU_ENTRADA = "1486811209565995169";
 const CANAL_BAU_SAIDA = "1486811278281408512";
+
+function normalizarTexto(txt) {
+  return String(txt || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
 
 function normalizarItem(item) {
   return String(item || "").trim().toLowerCase();
@@ -64,36 +73,46 @@ function criarOpcoesItens() {
   }));
 }
 
-function canalEhEntrada(channelId) {
-  return String(channelId) === CANAL_BAU_ENTRADA;
+function canalEhEntrada(channel) {
+  if (!channel) return false;
+  const id = String(channel.id);
+  const nome = normalizarTexto(channel.name);
+
+  return id === CANAL_BAU_ENTRADA || nome === "entrada-bau";
 }
 
-function canalEhSaida(channelId) {
-  return String(channelId) === CANAL_BAU_SAIDA;
+function canalEhSaida(channel) {
+  if (!channel) return false;
+  const id = String(channel.id);
+  const nome = normalizarTexto(channel.name);
+
+  return id === CANAL_BAU_SAIDA || nome === "saida-bau";
 }
 
-function validarCanalPorAcao(acao, channelId) {
-  if (acao === "entrada") return canalEhEntrada(channelId);
-  if (acao === "saida") return canalEhSaida(channelId);
-  if (acao === "transferir") return canalEhSaida(channelId);
-  if (acao === "ver") return canalEhEntrada(channelId) || canalEhSaida(channelId);
+function validarCanalPorAcao(acao, channel) {
+  if (acao === "entrada") return canalEhEntrada(channel);
+  if (acao === "saida") return canalEhSaida(channel);
+  if (acao === "transferir") return canalEhSaida(channel);
+  if (acao === "ver") return canalEhEntrada(channel) || canalEhSaida(channel);
   return false;
 }
 
-function mensagemCanalInvalido(acao) {
+function mensagemCanalInvalido(acao, channel) {
+  const atual = channel?.name ? `\n📍 Canal atual: **#${channel.name}**` : "";
+
   if (acao === "entrada") {
-    return "❌ Use este painel no canal de **entrada-bau** da gerência para registrar produtos recebidos dos fornecedores.";
+    return `❌ Use este painel no canal de **entrada-bau** da gerência para registrar produtos recebidos dos fornecedores.${atual}`;
   }
 
   if (acao === "saida") {
-    return "❌ Use este painel no canal de **saida-bau** da gerência para retirar itens do estoque principal.";
+    return `❌ Use este painel no canal de **saida-bau** da gerência para retirar itens do estoque principal.${atual}`;
   }
 
   if (acao === "transferir") {
-    return "❌ Use este painel no canal de **saida-bau** da gerência para transferir itens para o controle de baú.";
+    return `❌ Use este painel no canal de **saida-bau** da gerência para transferir itens para o controle de baú.${atual}`;
   }
 
-  return "❌ Use este painel no canal correto do baú da gerência.";
+  return `❌ Use este painel no canal correto do baú da gerência.${atual}`;
 }
 
 function responderRedirecionamentoForum(interaction, acao) {
@@ -223,9 +242,9 @@ async function abrirSelecaoEntradaBau(interaction) {
     return responderRedirecionamentoForum(interaction, "entrada");
   }
 
-  if (!validarCanalPorAcao("entrada", interaction.channelId)) {
+  if (!validarCanalPorAcao("entrada", interaction.channel)) {
     return interaction.reply({
-      content: mensagemCanalInvalido("entrada"),
+      content: mensagemCanalInvalido("entrada", interaction.channel),
       flags: 64
     });
   }
@@ -256,9 +275,9 @@ async function abrirSelecaoSaidaBau(interaction) {
     return responderRedirecionamentoForum(interaction, "saida");
   }
 
-  if (!validarCanalPorAcao("saida", interaction.channelId)) {
+  if (!validarCanalPorAcao("saida", interaction.channel)) {
     return interaction.reply({
-      content: mensagemCanalInvalido("saida"),
+      content: mensagemCanalInvalido("saida", interaction.channel),
       flags: 64
     });
   }
@@ -289,9 +308,9 @@ async function abrirSelecaoTransferirBau(interaction) {
     return responderRedirecionamentoForum(interaction, "transferir");
   }
 
-  if (!validarCanalPorAcao("transferir", interaction.channelId)) {
+  if (!validarCanalPorAcao("transferir", interaction.channel)) {
     return interaction.reply({
-      content: mensagemCanalInvalido("transferir"),
+      content: mensagemCanalInvalido("transferir", interaction.channel),
       flags: 64
     });
   }
@@ -325,9 +344,9 @@ async function processarSelecaoBauGerencia(interaction, client) {
   if (interaction.customId === BAU_SELECT_SAIDA) acao = "saida";
   if (interaction.customId === BAU_SELECT_TRANSFERIR) acao = "transferir";
 
-  if (!validarCanalPorAcao(acao, interaction.channelId)) {
+  if (!validarCanalPorAcao(acao, interaction.channel)) {
     return interaction.reply({
-      content: mensagemCanalInvalido(acao),
+      content: mensagemCanalInvalido(acao, interaction.channel),
       flags: 64
     });
   }
@@ -370,9 +389,9 @@ async function processarModalBauGerencia(interaction, client) {
 
   const [, acao, item] = interaction.customId.split(":");
 
-  if (!validarCanalPorAcao(acao, interaction.channelId)) {
+  if (!validarCanalPorAcao(acao, interaction.channel)) {
     return interaction.reply({
-      content: mensagemCanalInvalido(acao),
+      content: mensagemCanalInvalido(acao, interaction.channel),
       flags: 64
     });
   }
@@ -595,7 +614,7 @@ async function verEstoqueBauGerencia(interaction) {
     return responderRedirecionamentoForum(interaction, "ver");
   }
 
-  if (!validarCanalPorAcao("ver", interaction.channelId)) {
+  if (!validarCanalPorAcao("ver", interaction.channel)) {
     return interaction.reply({
       content: "❌ Use este painel nos canais entrada-bau ou saida-bau.",
       flags: 64
