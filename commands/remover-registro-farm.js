@@ -1,101 +1,123 @@
-const { SlashCommandBuilder } = require("discord.js");
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const FarmRegistro = require("../models/FarmRegistro");
-const { isGerenteOuLider } = require("../utils/permissoes");
-const logAjuste = require("../utils/logAjuste");
+const getSemanaRP = require("../utils/semanaRP");
 const { sincronizarPlanilhaFarm } = require("../utils/googleSheetsFarm");
-const { sincronizarCaixaFaccao } = require("../utils/financeiroFaccao");
+const { isGerenteOuLider } = require("../utils/permissoes");
 
 function formatMoney(value) {
-  const numero = Number(value) || 0;
-  return new Intl.NumberFormat("pt-BR").format(numero);
+  return new Intl.NumberFormat("pt-BR").format(Number(value) || 0);
 }
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName("remover-registro-dinheiro-sujo")
-    .setDescription("Remove um registro específico de dinheiro sujo pelo ID")
-    .addStringOption(option =>
+    .setName("remover-registro-farm")
+    .setDescription("Remove um valor específico do dinheiro sujo de um membro")
+    .addUserOption((option) =>
       option
-        .setName("id")
-        .setDescription("ID do registro que será removido")
+        .setName("usuario")
+        .setDescription("Membro que terá valor removido")
         .setRequired(true)
     )
-    .addStringOption(option =>
+    .addIntegerOption((option) =>
+      option
+        .setName("valor")
+        .setDescription("Quantidade de dinheiro que deseja remover")
+        .setRequired(true)
+        .setMinValue(1)
+    )
+    .addStringOption((option) =>
       option
         .setName("motivo")
         .setDescription("Motivo da remoção")
         .setRequired(true)
+    )
+    .addStringOption((option) =>
+      option
+        .setName("semana")
+        .setDescription("Semana no formato 2026-04-11_2026-04-18. Se não informar, usa a atual.")
+        .setRequired(false)
     ),
 
-  async execute(interaction, client) {
+  async execute(interaction) {
     if (!isGerenteOuLider(interaction.member)) {
       return interaction.reply({
-        content: "❌ Apenas a gerência pode usar este comando.",
+        content: "❌ Apenas a liderança pode remover valores do farm.",
         flags: 64
       });
     }
 
-    await interaction.deferReply({ flags: 64 });
-
-    const id = interaction.options.getString("id", true).trim();
+    const usuario = interaction.options.getUser("usuario", true);
+    const valor = interaction.options.getInteger("valor", true);
     const motivo = interaction.options.getString("motivo", true).trim();
+    const semanaInformada = interaction.options.getString("semana");
 
-    const registro = await FarmRegistro.findById(id);
+    const semanaAtual = getSemanaRP();
+    const semanaId = semanaInformada?.trim() || semanaAtual.semanaId;
 
-    if (!registro) {
-      return interaction.editReply({
-        content: "❌ Registro não encontrado."
+    const registros = await FarmRegistro.find({
+      userId: usuario.id,
+      semanaId
+    }).sort({ registradoEm: -1 });
+
+    if (!registros.length) {
+      return interaction.reply({
+        content: `❌ Nenhum registro encontrado para **${usuario.username}** na semana **${semanaId}**.`,
+        flags: 64
       });
     }
 
-    const dadosRegistro = {
-      userId: registro.userId,
-      username: registro.username,
-      valor: registro.valor,
-      cargo: registro.cargo,
-      semanaId: registro.semanaId,
-      comprovante: registro.comprovante,
-      registradoEm: registro.registradoEm
-    };
+    const totalAtual = registros.reduce((acc, item) => acc + (Number(item.valor) || 0), 0);
 
-    await FarmRegistro.deleteOne({ _id: registro._id });
+    if (valor > totalAtual) {
+      return interaction.reply({
+        content: [
+          `❌ Não é possível remover **R$ ${formatMoney(valor)}**.`,
+          `📊 Total atual de **${usuario.username}** na semana **${semanaId}**: **R$ ${formatMoney(totalAtual)}**`
+        ].join("\n"),
+        flags: 64
+      });
+    }
 
-    const registrosRestantes = await FarmRegistro.find({
-      userId: dadosRegistro.userId,
-      semanaId: dadosRegistro.semanaId
+    const novoRegistro = await FarmRegistro.create({
+      userId: usuario.id,
+      username: usuario.username,
+      cargo: "ajuste",
+      valor: -Math.abs(valor),
+      comprovante: `REMOÇÃO MANUAL: ${motivo}`,
+      semanaId,
+      registradoEm: new Date()
     });
 
-    const totalAtual = registrosRestantes.reduce(
-      (acc, item) => acc + (Number(item.valor) || 0),
-      0
-    );
+    const totalDepois = totalAtual - Math.abs(valor);
 
-    await logAjuste(client, {
-      tipo: "Remoção de registro de dinheiro sujo",
-      responsavel: interaction.user.tag,
-      alvo: `${dadosRegistro.username} (${dadosRegistro.userId})`,
-      acao: "remover registro",
-      valor: dadosRegistro.valor,
-      motivo: `${motivo} | Registro removido: ${id}`
-    });
+    try {
+      if (interaction.guild) {
+        await sincronizarPlanilhaFarm(interaction.guild);
+      }
+    } catch (error) {
+      console.error("Erro ao sincronizar planilha após remoção:", error);
+    }
 
-    await sincronizarCaixaFaccao().catch((error) => {
-      console.error("Erro ao sincronizar caixa após remover registro:", error);
-    });
+    const embed = new EmbedBuilder()
+      .setColor(0xe67e22)
+      .setTitle("🗑️ Remoção de valor do dinheiro sujo")
+      .setDescription(
+        [
+          `👤 Membro: ${usuario}`,
+          `🗓️ Semana: **${semanaId}**`,
+          `💸 Valor removido: **R$ ${formatMoney(valor)}**`,
+          `📊 Total antes: **R$ ${formatMoney(totalAtual)}**`,
+          `📉 Total depois: **R$ ${formatMoney(totalDepois)}**`,
+          `📝 Motivo: **${motivo}**`,
+          `🆔 Registro de ajuste: \`${novoRegistro._id}\``
+        ].join("\n")
+      )
+      .setFooter({ text: "SINNERS BOT • Remoção de valor" })
+      .setTimestamp();
 
-    await sincronizarPlanilhaFarm(interaction.guild).catch((error) => {
-      console.error("Erro ao sincronizar planilha após remover registro:", error);
-    });
-
-    return interaction.editReply({
-      content: [
-        "✅ Registro de dinheiro sujo removido com sucesso.",
-        `👤 Usuário: **${dadosRegistro.username}**`,
-        `🆔 Registro removido: \`${id}\``,
-        `💰 Valor removido: **R$ ${formatMoney(dadosRegistro.valor)}**`,
-        `🗓️ Semana: **${dadosRegistro.semanaId}**`,
-        `📊 Total atual da semana: **R$ ${formatMoney(totalAtual)}**`
-      ].join("\n")
+    return interaction.reply({
+      embeds: [embed],
+      flags: 64
     });
   }
 };
