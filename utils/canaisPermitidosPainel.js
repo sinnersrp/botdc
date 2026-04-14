@@ -1,107 +1,90 @@
 const { canais } = require("../config/config");
 
-function unique(ids) {
-  return [...new Set(ids.filter(Boolean).map(String))];
+function normalizeName(name = "") {
+  return String(name)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
 }
 
-function getForumChannelIds() {
-  return unique([
+function sameName(channel, expected) {
+  return normalizeName(channel?.name) === normalizeName(expected);
+}
+
+function isInCategory(channel, categoryIds = []) {
+  if (!channel?.parentId) return false;
+  return categoryIds.map(String).includes(String(channel.parentId));
+}
+
+function isForum(channel) {
+  const forumIds = [
     canais.forumComandoBot,
+    canais.comandoBot,
     canais.comandoBotForum,
-    canais.comandoBot
-  ]);
-}
+    "1492991343948070922"
+  ]
+    .filter(Boolean)
+    .map(String);
 
-function getPainelMap() {
-  return {
-    farm: unique([
-      ...getForumChannelIds(),
-      canais.farm,
-      canais.canalFarm,
-      canais.dinheiroSujo,
-      canais.canalDinheiroSujo,
-      canais.metaSemanal
-    ]),
-    bau: unique([
-      ...getForumChannelIds(),
-      canais.bauGerencia,
-      canais.canalBauGerencia
-    ]),
-    controle_bau: unique([
-      ...getForumChannelIds(),
-      canais.controleBau,
-      canais.canalControleBau
-    ]),
-    registro: unique([
-      ...getForumChannelIds(),
-      canais.registro,
-      canais.canalRegistro,
-      canais.canalRegistroDiscord
-    ]),
-    avisos: unique([
-      ...getForumChannelIds(),
-      canais.avisos,
-      canais.canalAvisos
-    ]),
-    gerencia: unique([
-      ...getForumChannelIds()
-    ])
-  };
-}
-
-function getPainelCategoryMap() {
-  return {
-    farm: unique([
-      canais.categoriaFarm,
-      canais.categoriaFarmPrivado
-    ]),
-    bau: unique([
-      canais.categoriaBau,
-      canais.categoriaGerencia,
-      canais.categoriaGerenciaExtra
-    ]),
-    controle_bau: unique([
-      canais.categoriaControleBau,
-      canais.categoriaControleBauExtra
-    ]),
-    registro: unique([
-      canais.categoriaRegistro
-    ]),
-    avisos: unique([
-      canais.categoriaAvisos
-    ]),
-    gerencia: unique([
-      canais.categoriaGerencia,
-      canais.categoriaGerenciaExtra
-    ])
-  };
+  return forumIds.includes(String(channel?.id));
 }
 
 function canUsePainelHere(tipo, channel) {
   if (!channel) return false;
 
-  const mapa = getPainelMap();
-  const categorias = getPainelCategoryMap();
+  if (isForum(channel)) return true;
 
-  const permitidos = mapa[tipo] || [];
-  const categoriasPermitidas = categorias[tipo] || [];
+  const categoriaFarm = ["1480507566302691412"];
+  const categoriaControleBau = ["1480507568265760812", "1480507568265760814"];
+  const categoriaBauGerencia = ["1486811209565995169", "1486811278281408512"];
 
-  const channelId = String(channel.id);
-  const parentId = channel.parentId ? String(channel.parentId) : null;
+  switch (tipo) {
+    case "registro":
+      return String(channel.id) === "1480507565770018849";
 
-  if (permitidos.includes(channelId)) return true;
-  if (parentId && categoriasPermitidas.includes(parentId)) return true;
+    case "avisos":
+      return String(channel.id) === "1480507565770018851";
 
-  return false;
+    case "farm":
+      if (String(channel.id) === "1480507566302691413") return true; // meta-semanal
+      return isInCategory(channel, categoriaFarm);
+
+    case "bau":
+      return (
+        isInCategory(channel, categoriaBauGerencia) &&
+        (sameName(channel, "entrada-bau") || sameName(channel, "saida-bau"))
+      );
+
+    case "controle_bau":
+      return (
+        isInCategory(channel, categoriaControleBau) &&
+        (sameName(channel, "entrada") || sameName(channel, "saida"))
+      );
+
+    default:
+      return false;
+  }
 }
 
-function getAllowedChannelMentions(tipo) {
-  const mapa = getPainelMap();
-  const permitidos = mapa[tipo] || [];
-  return permitidos.map((id) => `<#${id}>`).join(", ");
+function getAllowedText(tipo) {
+  switch (tipo) {
+    case "registro":
+      return "fórum comando-bot ou canal registro";
+    case "avisos":
+      return "fórum comando-bot ou canal de avisos";
+    case "farm":
+      return "fórum comando-bot, meta-semanal ou canais da área FARM";
+    case "bau":
+      return "fórum comando-bot ou canais entrada-bau / saida-bau do baú gerência";
+    case "controle_bau":
+      return "fórum comando-bot ou canais entrada / saida do controle de baú";
+    default:
+      return "canal permitido";
+  }
 }
 
 module.exports = {
   canUsePainelHere,
-  getAllowedChannelMentions
+  getAllowedText
 };
