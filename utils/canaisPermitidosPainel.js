@@ -30,20 +30,28 @@ function canUsePainelHere(tipo, channel) {
 
     case "farm":
       return (
-        channelId === "1480507566302691413" || // meta-semanal
-        parentId === "1480507566302691412"     // canais da área farm
+        channelId === "1480507566302691413" ||
+        parentId === "1480507566302691412"
       );
 
     case "bau":
       return (
-        channelId === "1486811209565995169" || // entrada-bau
-        channelId === "1486811278281408512"    // saida-bau
+        channelId === "1486811209565995169" ||
+        channelId === "1486811278281408512"
       );
 
     case "controle_bau":
       return (
-        channelId === "1480507568265760812" || // entrada
-        channelId === "1480507568265760814"    // saida
+        channelId === "1480507568265760812" ||
+        channelId === "1480507568265760814"
+      );
+
+    case "gerencia":
+      return (
+        channelId === "1486811209565995169" || // troque se quiser outro canal
+        channelId === "1486811278281408512" || // troque se quiser outro canal
+        channel.name === "chat-da-gerencia" ||
+        channel.name === "logs"
       );
 
     default:
@@ -63,6 +71,8 @@ function getAllowedText(tipo) {
       return "fórum comando-bot ou canais entrada-bau / saida-bau";
     case "controle_bau":
       return "fórum comando-bot ou canais entrada / saida do controle de baú";
+    case "gerencia":
+      return "fórum comando-bot ou canais de gerência, como chat-da-gerencia e logs";
     default:
       return "canal permitido";
   }
