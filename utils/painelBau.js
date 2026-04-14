@@ -10,8 +10,8 @@ const {
 } = require("discord.js");
 const ControleBau = require("../models/ControleBau");
 const MovimentacaoBau = require("../models/MovimentacaoBau");
-const { isGerenteOuLider } = require("./permissoes");
-const { canais, itensGerais, itensArmas } = require("../config/config");
+const { podeUsarBauGerencia } = require("./permissoes");
+const { itensGerais, itensArmas } = require("../config/config");
 
 const BAU_BUTTON_ENTRADA = "bau_gerencia_entrada";
 const BAU_BUTTON_SAIDA = "bau_gerencia_saida";
@@ -21,6 +21,9 @@ const BAU_SELECT_ENTRADA = "bau_gerencia_select_entrada";
 const BAU_SELECT_SAIDA = "bau_gerencia_select_saida";
 
 const BAU_MODAL_PREFIX = "bau_gerencia_modal";
+
+const CANAL_BAU_ENTRADA = "1486811209565995169";
+const CANAL_BAU_SAIDA = "1486811278281408512";
 
 function normalizarItem(item) {
   return String(item || "").trim().toLowerCase();
@@ -43,8 +46,13 @@ function getItemDb(item) {
   return `gerencia_${normalizarItem(item)}`;
 }
 
+function formatarQuantidade(valor) {
+  return new Intl.NumberFormat("pt-BR").format(Number(valor) || 0);
+}
+
 function criarOpcoesItens() {
   const todos = [...itensGerais, ...itensArmas];
+
   return todos.slice(0, 25).map((item) => ({
     label: formatarNomeBonito(item),
     value: normalizarItem(item),
@@ -52,8 +60,40 @@ function criarOpcoesItens() {
   }));
 }
 
-function formatarQuantidade(valor) {
-  return new Intl.NumberFormat("pt-BR").format(Number(valor) || 0);
+function canalEhEntrada(channelId) {
+  return String(channelId) === CANAL_BAU_ENTRADA;
+}
+
+function canalEhSaida(channelId) {
+  return String(channelId) === CANAL_BAU_SAIDA;
+}
+
+function validarCanalPorAcao(acao, channelId) {
+  if (acao === "entrada") {
+    return canalEhEntrada(channelId);
+  }
+
+  if (acao === "saida") {
+    return canalEhSaida(channelId);
+  }
+
+  if (acao === "ver") {
+    return canalEhEntrada(channelId) || canalEhSaida(channelId);
+  }
+
+  return false;
+}
+
+function mensagemCanalInvalido(acao) {
+  if (acao === "entrada") {
+    return "❌ Use este painel no canal de **entrada-bau** da gerência para adicionar item.";
+  }
+
+  if (acao === "saida") {
+    return "❌ Use este painel no canal de **saida-bau** da gerência para retirar item.";
+  }
+
+  return "❌ Use este painel no canal correto do baú da gerência.";
 }
 
 function criarPainelBau() {
@@ -64,9 +104,10 @@ function criarPainelBau() {
       [
         "Use os botões abaixo para gerenciar o baú da gerência.",
         "",
-        "• **Entrada**: adiciona itens no baú",
-        "• **Saída**: remove itens do baú",
-        "• **Ver estoque**: mostra o estoque atual"
+        "**Regras deste painel:**",
+        "• **Entrada no baú** → canal **entrada-bau**",
+        "• **Saída no baú** → canal **saida-bau**",
+        "• **Ver estoque** → funciona nos dois"
       ].join("\n")
     )
     .setFooter({ text: "SINNERS BOT • Baú da Gerência" })
@@ -75,19 +116,19 @@ function criarPainelBau() {
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(BAU_BUTTON_ENTRADA)
-      .setLabel("Entrada")
+      .setLabel("Entrada no baú")
       .setEmoji("📥")
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
       .setCustomId(BAU_BUTTON_SAIDA)
-      .setLabel("Saída")
+      .setLabel("Saída no baú")
       .setEmoji("📤")
       .setStyle(ButtonStyle.Danger),
     new ButtonBuilder()
       .setCustomId(BAU_BUTTON_VER)
       .setLabel("Ver estoque")
       .setEmoji("📋")
-      .setStyle(ButtonStyle.Secondary)
+      .setStyle(ButtonStyle.Primary)
   );
 
   return {
@@ -97,9 +138,16 @@ function criarPainelBau() {
 }
 
 async function abrirSelecaoEntradaBau(interaction) {
-  if (!isGerenteOuLider(interaction.member)) {
+  if (!podeUsarBauGerencia(interaction.member)) {
     return interaction.reply({
-      content: "❌ Apenas a gerência pode usar este painel.",
+      content: "❌ Apenas 01, 02, 03 e gerente geral podem usar este painel.",
+      flags: 64
+    });
+  }
+
+  if (!validarCanalPorAcao("entrada", interaction.channelId)) {
+    return interaction.reply({
+      content: mensagemCanalInvalido("entrada"),
       flags: 64
     });
   }
@@ -119,9 +167,16 @@ async function abrirSelecaoEntradaBau(interaction) {
 }
 
 async function abrirSelecaoSaidaBau(interaction) {
-  if (!isGerenteOuLider(interaction.member)) {
+  if (!podeUsarBauGerencia(interaction.member)) {
     return interaction.reply({
-      content: "❌ Apenas a gerência pode usar este painel.",
+      content: "❌ Apenas 01, 02, 03 e gerente geral podem usar este painel.",
+      flags: 64
+    });
+  }
+
+  if (!validarCanalPorAcao("saida", interaction.channelId)) {
+    return interaction.reply({
+      content: mensagemCanalInvalido("saida"),
       flags: 64
     });
   }
@@ -141,15 +196,22 @@ async function abrirSelecaoSaidaBau(interaction) {
 }
 
 async function processarSelecaoBauGerencia(interaction) {
-  if (!isGerenteOuLider(interaction.member)) {
+  if (!podeUsarBauGerencia(interaction.member)) {
     return interaction.reply({
-      content: "❌ Apenas a gerência pode usar este painel.",
+      content: "❌ Você não tem permissão para esta ação.",
       flags: 64
     });
   }
 
   const item = interaction.values?.[0];
   const acao = interaction.customId === BAU_SELECT_ENTRADA ? "entrada" : "saida";
+
+  if (!validarCanalPorAcao(acao, interaction.channelId)) {
+    return interaction.reply({
+      content: mensagemCanalInvalido(acao),
+      flags: 64
+    });
+  }
 
   const modal = new ModalBuilder()
     .setCustomId(`${BAU_MODAL_PREFIX}:${acao}:${item}`)
@@ -180,14 +242,22 @@ async function processarSelecaoBauGerencia(interaction) {
 }
 
 async function processarModalBauGerencia(interaction) {
-  if (!isGerenteOuLider(interaction.member)) {
+  if (!podeUsarBauGerencia(interaction.member)) {
     return interaction.reply({
-      content: "❌ Apenas a gerência pode usar este painel.",
+      content: "❌ Você não tem permissão para esta ação.",
       flags: 64
     });
   }
 
   const [, acao, item] = interaction.customId.split(":");
+
+  if (!validarCanalPorAcao(acao, interaction.channelId)) {
+    return interaction.reply({
+      content: mensagemCanalInvalido(acao),
+      flags: 64
+    });
+  }
+
   const quantidade = Number(interaction.fields.getTextInputValue("quantidade"));
   const observacao = interaction.fields.getTextInputValue("observacao") || "Sem observação";
 
@@ -219,11 +289,8 @@ async function processarModalBauGerencia(interaction) {
     });
   }
 
-  if (acao === "entrada") {
-    registro.quantidade += quantidade;
-  } else {
-    registro.quantidade -= quantidade;
-  }
+  if (acao === "entrada") registro.quantidade += quantidade;
+  if (acao === "saida") registro.quantidade -= quantidade;
 
   await registro.save();
 
@@ -274,9 +341,16 @@ async function processarModalBauGerencia(interaction) {
 }
 
 async function verEstoqueBauGerencia(interaction) {
-  if (!isGerenteOuLider(interaction.member)) {
+  if (!podeUsarBauGerencia(interaction.member)) {
     return interaction.reply({
-      content: "❌ Apenas a gerência pode usar este painel.",
+      content: "❌ Apenas 01, 02, 03 e gerente geral podem ver este estoque.",
+      flags: 64
+    });
+  }
+
+  if (!validarCanalPorAcao("ver", interaction.channelId)) {
+    return interaction.reply({
+      content: "❌ Use este painel nos canais entrada-bau ou saida-bau.",
       flags: 64
     });
   }
