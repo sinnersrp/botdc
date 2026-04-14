@@ -1,11 +1,9 @@
 const cargos = {
-  gerenteGeral: process.env.CARGO_GERENTE_GERAL || "",
-  gerenteFarm: process.env.CARGO_GERENTE_FARM || "",
-  gerenteBau: process.env.CARGO_GERENTE_BAU || "",
-  gerenteAcao: process.env.CARGO_GERENTE_ACAO || "",
-  lider: process.env.CARGO_LIDER || "",
-  membro: process.env.CARGO_MEMBRO || "",
-  developer: process.env.CARGO_DEVELOPER || ""
+  cargo01: "1480507564251942969",
+  cargo02: "1480507564251942968",
+  cargo03: "1480507564251942967",
+  gerenteGeral: "1480507564251942966",
+  membro: "1480507564189024262"
 };
 
 const canais = {
@@ -27,7 +25,6 @@ const canais = {
   controleBau: "",
   canalControleBau: "",
   categoriaControleBau: "1480507568265760812",
-
   categoriaControleBauExtra: "1480507568265760814",
 
   registro: "1480507565770018849",

@@ -1,78 +1,99 @@
-function normalizarIds(input) {
-  if (!input) return [];
+const { cargos } = require("../config/config");
 
-  if (Array.isArray(input)) {
-    return input.map(String).filter(Boolean);
-  }
+function toArray(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
 
-  if (typeof input === "string") {
-    return input
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
-
-  return [String(input)].filter(Boolean);
+  return String(value)
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
 }
 
-function getMemberRoleIds(member) {
-  if (!member || !member.roles || !member.roles.cache) return [];
+function getRoleIds(member) {
+  if (!member?.roles?.cache) return [];
   return [...member.roles.cache.keys()].map(String);
 }
 
-function membroTemAlgumCargo(member, cargosPermitidos) {
-  const memberRoleIds = getMemberRoleIds(member);
-  const permitidos = normalizarIds(cargosPermitidos);
+function hasAnyRole(member, roleIds) {
+  const memberRoles = getRoleIds(member);
+  const allowed = toArray(roleIds);
 
-  if (!memberRoleIds.length || !permitidos.length) return false;
+  if (!memberRoles.length || !allowed.length) return false;
+  return allowed.some((roleId) => memberRoles.includes(String(roleId)));
+}
 
-  return permitidos.some((cargoId) => memberRoleIds.includes(String(cargoId)));
+function getCargosAltos() {
+  return [
+    cargos.cargo01,
+    cargos.cargo02,
+    cargos.cargo03,
+    cargos.gerenteGeral
+  ];
+}
+
+function getTodosOsCargos() {
+  return [
+    cargos.cargo01,
+    cargos.cargo02,
+    cargos.cargo03,
+    cargos.gerenteGeral,
+    cargos.membro
+  ];
 }
 
 function isGerenteOuLider(member) {
-  try {
-    const { cargos } = require("../config/config");
-
-    const cargosGerencia = normalizarIds([
-      ...(normalizarIds(cargos?.gerenteGeral)),
-      ...(normalizarIds(cargos?.gerenteFarm)),
-      ...(normalizarIds(cargos?.gerenteBau)),
-      ...(normalizarIds(cargos?.gerenteAcao)),
-      ...(normalizarIds(cargos?.lider)),
-      ...(normalizarIds(cargos?.developer))
-    ]);
-
-    return membroTemAlgumCargo(member, cargosGerencia);
-  } catch (error) {
-    console.error("Erro em isGerenteOuLider:", error);
-    return false;
-  }
+  return hasAnyRole(member, getCargosAltos());
 }
 
 function isMembro(member) {
-  try {
-    const { cargos } = require("../config/config");
+  return hasAnyRole(member, getTodosOsCargos());
+}
 
-    const cargosMembro = normalizarIds([
-      ...(normalizarIds(cargos?.membro)),
-      ...(normalizarIds(cargos?.gerenteGeral)),
-      ...(normalizarIds(cargos?.gerenteFarm)),
-      ...(normalizarIds(cargos?.gerenteBau)),
-      ...(normalizarIds(cargos?.gerenteAcao)),
-      ...(normalizarIds(cargos?.lider)),
-      ...(normalizarIds(cargos?.developer))
-    ]);
+function podeUsarRegistro(member) {
+  return hasAnyRole(member, getTodosOsCargos());
+}
 
-    return membroTemAlgumCargo(member, cargosMembro);
-  } catch (error) {
-    console.error("Erro em isMembro:", error);
-    return false;
+function podeUsarControleBau(member) {
+  return hasAnyRole(member, getTodosOsCargos());
+}
+
+function podeUsarBauGerencia(member) {
+  return hasAnyRole(member, getCargosAltos());
+}
+
+function getFarmOwnerId(channel) {
+  if (!channel) return null;
+
+  if (channel.topic && String(channel.topic).startsWith("farm:")) {
+    return String(channel.topic).replace("farm:", "").trim();
   }
+
+  return null;
+}
+
+function podeUsarFarmNoCanal(member, channel) {
+  if (!member || !channel) return false;
+
+  if (hasAnyRole(member, getCargosAltos())) {
+    return true;
+  }
+
+  const ownerId = getFarmOwnerId(channel);
+  if (!ownerId) return false;
+
+  return String(member.id) === String(ownerId);
 }
 
 module.exports = {
-  normalizarIds,
-  membroTemAlgumCargo,
+  toArray,
+  getRoleIds,
+  hasAnyRole,
   isGerenteOuLider,
-  isMembro
+  isMembro,
+  podeUsarRegistro,
+  podeUsarControleBau,
+  podeUsarBauGerencia,
+  podeUsarFarmNoCanal,
+  getFarmOwnerId
 };
