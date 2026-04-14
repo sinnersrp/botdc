@@ -1,29 +1,38 @@
 const { SlashCommandBuilder } = require("discord.js");
-const { isGerenteOuLider } = require("../utils/permissoes");
 const { criarPainelAvisos } = require("../utils/painelAvisos");
-const { enviarPainelNoForum } = require("../utils/forumPainel");
+const { isGerenteOuLider } = require("../utils/permissoes");
+const {
+  canUsePainelHere,
+  getAllowedChannelMentions
+} = require("../utils/canaisPermitidosPainel");
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("painel-avisos")
-    .setDescription("Envia o painel bonito de avisos no fórum comando-bot"),
+    .setDescription("Envia o painel de avisos neste canal"),
 
   async execute(interaction) {
     if (!isGerenteOuLider(interaction.member)) {
       return interaction.reply({
-        content: "❌ Apenas gerente ou líder pode usar este comando.",
+        content: "❌ Apenas a gerência pode usar este comando.",
         flags: 64
       });
     }
 
-    await enviarPainelNoForum(
-      interaction.client,
-      "📢 Painel de Avisos",
-      criarPainelAvisos()
-    );
+    if (!canUsePainelHere("avisos", interaction.channelId)) {
+      return interaction.reply({
+        content: [
+          "❌ Este painel só pode ser enviado no fórum de comandos ou no canal de avisos.",
+          `📍 Canais permitidos: ${getAllowedChannelMentions("avisos") || "configure no config.js"}`
+        ].join("\n"),
+        flags: 64
+      });
+    }
+
+    await interaction.channel.send(criarPainelAvisos());
 
     return interaction.reply({
-      content: "✅ Painel de avisos enviado no fórum comando-bot.",
+      content: "✅ Painel de avisos enviado neste canal.",
       flags: 64
     });
   }

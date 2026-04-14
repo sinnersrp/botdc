@@ -1,29 +1,38 @@
 const { SlashCommandBuilder } = require("discord.js");
-const { isGerenteOuLider } = require("../utils/permissoes");
 const { criarPainelFarm } = require("../utils/painelFarm");
-const { enviarPainelNoForum } = require("../utils/forumPainel");
+const { isGerenteOuLider } = require("../utils/permissoes");
+const {
+  canUsePainelHere,
+  getAllowedChannelMentions
+} = require("../utils/canaisPermitidosPainel");
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("painel-farm")
-    .setDescription("Envia o painel bonito de farm no fórum comando-bot"),
+    .setDescription("Envia o painel de dinheiro sujo neste canal"),
 
   async execute(interaction) {
     if (!isGerenteOuLider(interaction.member)) {
       return interaction.reply({
-        content: "❌ Apenas gerente ou líder pode usar este comando.",
+        content: "❌ Apenas a gerência pode usar este comando.",
         flags: 64
       });
     }
 
-    await enviarPainelNoForum(
-      interaction.client,
-      "💸 Painel de Farm",
-      criarPainelFarm()
-    );
+    if (!canUsePainelHere("farm", interaction.channelId)) {
+      return interaction.reply({
+        content: [
+          "❌ Este painel só pode ser enviado no fórum de comandos ou no canal de dinheiro sujo.",
+          `📍 Canais permitidos: ${getAllowedChannelMentions("farm") || "configure no config.js"}`
+        ].join("\n"),
+        flags: 64
+      });
+    }
+
+    await interaction.channel.send(criarPainelFarm());
 
     return interaction.reply({
-      content: "✅ Painel de farm enviado no fórum comando-bot.",
+      content: "✅ Painel de dinheiro sujo enviado neste canal.",
       flags: 64
     });
   }

@@ -1,29 +1,38 @@
 const { SlashCommandBuilder } = require("discord.js");
-const { isGerenteOuLider } = require("../utils/permissoes");
 const { criarPainelBau } = require("../utils/painelBau");
-const { enviarPainelNoForum } = require("../utils/forumPainel");
+const { isGerenteOuLider } = require("../utils/permissoes");
+const {
+  canUsePainelHere,
+  getAllowedChannelMentions
+} = require("../utils/canaisPermitidosPainel");
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("painel-bau")
-    .setDescription("Envia o painel bonito do baú da gerência no fórum comando-bot"),
+    .setDescription("Envia o painel do baú da gerência neste canal"),
 
   async execute(interaction) {
     if (!isGerenteOuLider(interaction.member)) {
       return interaction.reply({
-        content: "❌ Apenas gerente ou líder pode usar este comando.",
+        content: "❌ Apenas a gerência pode usar este comando.",
         flags: 64
       });
     }
 
-    await enviarPainelNoForum(
-      interaction.client,
-      "📦 Painel do Baú da Gerência",
-      criarPainelBau()
-    );
+    if (!canUsePainelHere("bau", interaction.channelId)) {
+      return interaction.reply({
+        content: [
+          "❌ Este painel só pode ser enviado no fórum de comandos ou no canal do baú da gerência.",
+          `📍 Canais permitidos: ${getAllowedChannelMentions("bau") || "configure no config.js"}`
+        ].join("\n"),
+        flags: 64
+      });
+    }
+
+    await interaction.channel.send(criarPainelBau());
 
     return interaction.reply({
-      content: "✅ Painel do baú da gerência enviado no fórum comando-bot.",
+      content: "✅ Painel do baú da gerência enviado neste canal.",
       flags: 64
     });
   }

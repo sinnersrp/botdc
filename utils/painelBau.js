@@ -325,16 +325,19 @@ async function verEstoqueBauGerencia(interaction) {
 }
 
 module.exports = {
-  BAU_BUTTON_ENTRADA,
-  BAU_BUTTON_SAIDA,
-  BAU_BUTTON_VER,
-  BAU_SELECT_ENTRADA,
-  BAU_SELECT_SAIDA,
-  BAU_MODAL_PREFIX,
-  abrirSelecaoEntradaBau,
-  abrirSelecaoSaidaBau,
-  criarPainelBau,
-  processarModalBauGerencia,
-  processarSelecaoBauGerencia,
-  verEstoqueBauGerencia
+  AVISO_BUTTON_AGORA,
+  AVISO_BUTTON_AGENDAR,
+  AVISO_SELECT_MENCAO_PREFIX,
+  AVISO_SELECT_DIA_PREFIX,
+  AVISO_SELECT_HORA_PREFIX,
+  AVISO_MODAL_AGORA_PREFIX,
+  AVISO_MODAL_AGENDAR_PREFIX,
+  abrirModalAvisoAgora,
+  abrirModalAvisoAgendar,
+  processarSelectMencao,
+  processarSelectDia,
+  processarSelectHora,
+  enviarAvisoAgora,
+  agendarAviso,
+  criarPainelAvisos
 };
