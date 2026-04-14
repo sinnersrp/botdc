@@ -8,7 +8,7 @@ const {
 const ControleBau = require("../models/ControleBau");
 const FarmRegistro = require("../models/FarmRegistro");
 const { itensGerais, itensArmas } = require("../config/config");
-const { isGerenteOuLider } = require("../utils/permissoes");
+const { podeUsarBauGerencia } = require("../utils/permissoes");
 const getSemanaRP = require("../utils/semanaRP");
 const logAjuste = require("../utils/logAjuste");
 const { sincronizarPlanilhaFarm } = require("../utils/googleSheetsFarm");
@@ -71,6 +71,13 @@ async function ajustarEstoque(interaction, client) {
   const item = interaction.options.getString("item", true);
   const quantidade = interaction.options.getInteger("quantidade", true);
   const motivo = interaction.options.getString("motivo", true);
+
+  if (!podeUsarBauGerencia(interaction.member)) {
+    return interaction.reply({
+      content: "❌ Apenas 01, 02, 03 e gerente geral podem usar este comando.",
+      flags: 64
+    });
+  }
 
   if (quantidade < 0) {
     return interaction.reply({
@@ -144,6 +151,13 @@ async function prepararAjusteFarm(interaction) {
   const acao = interaction.options.getString("acao", true);
   const valor = interaction.options.getInteger("valor", true);
   const motivo = interaction.options.getString("motivo", true);
+
+  if (!podeUsarBauGerencia(interaction.member)) {
+    return interaction.reply({
+      content: "❌ Apenas 01, 02, 03 e gerente geral podem usar este comando.",
+      flags: 64
+    });
+  }
 
   if (valor <= 0) {
     return interaction.reply({
@@ -231,11 +245,23 @@ async function prepararAjusteFarm(interaction) {
 }
 
 async function confirmarAjusteFarm(interaction, client) {
+  if (!podeUsarBauGerencia(interaction.member)) {
+    if (!interaction.deferred && !interaction.replied) {
+      return interaction.reply({
+        content: "❌ Apenas 01, 02, 03 e gerente geral podem usar este botão.",
+        flags: 64
+      });
+    }
+    return;
+  }
+
+  await interaction.deferUpdate();
+
   const dados = parseFarmConfirmCustomId(interaction.customId);
 
   const user = await client.users.fetch(dados.userId).catch(() => null);
   if (!user) {
-    return interaction.update({
+    return interaction.editReply({
       content: "❌ Não foi possível encontrar o usuário desse ajuste.",
       embeds: [],
       components: []
@@ -280,7 +306,7 @@ async function confirmarAjusteFarm(interaction, client) {
     console.error("Erro ao sincronizar planilha após ajuste:", error);
   });
 
-  return interaction.update({
+  return interaction.editReply({
     content: [
       "✅ Ajuste de dinheiro sujo confirmado.",
       `👤 Usuário: **${user.username}**`,
@@ -362,13 +388,6 @@ module.exports = {
     ),
 
   async execute(interaction, client) {
-    if (!isGerenteOuLider(interaction.member)) {
-      return interaction.reply({
-        content: "❌ Apenas gerência pode usar este comando.",
-        flags: 64
-      });
-    }
-
     const subcommand = interaction.options.getSubcommand();
 
     if (subcommand === "dinheiro-sujo") {
