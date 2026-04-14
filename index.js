@@ -77,6 +77,7 @@ const {
 } = require("./utils/painelAvisos");
 
 const ajusteGerenciaCommand = require("./commands/ajuste-gerencia");
+const removerRegistroDinheiroSujoCommand = require("./commands/remover-registro-dinheiro-sujo");
 
 const client = new Client({
   intents: [
@@ -226,6 +227,14 @@ client.on("interactionCreate", async (interaction) => {
         return;
       }
 
+      if (
+        interaction.customId.startsWith(`${removerRegistroDinheiroSujoCommand.REMOVER_REGISTRO_CONFIRM_PREFIX}:`) ||
+        interaction.customId.startsWith(`${removerRegistroDinheiroSujoCommand.REMOVER_REGISTRO_CANCEL_PREFIX}:`)
+      ) {
+        await removerRegistroDinheiroSujoCommand.handleButton(interaction);
+        return;
+      }
+
       return;
     }
 
@@ -262,6 +271,11 @@ client.on("interactionCreate", async (interaction) => {
 
       if (interaction.customId.startsWith(`${AVISO_SELECT_HORA_PREFIX}:`)) {
         await processarSelectHora(interaction);
+        return;
+      }
+
+      if (interaction.customId.startsWith(`${removerRegistroDinheiroSujoCommand.REMOVER_REGISTRO_SELECT_PREFIX}:`)) {
+        await removerRegistroDinheiroSujoCommand.handleSelectMenu(interaction);
         return;
       }
 
