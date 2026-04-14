@@ -9,7 +9,7 @@ const {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("painel-farm")
-    .setDescription("Envia o painel de dinheiro sujo neste canal"),
+    .setDescription("Envia o painel de farm neste canal"),
 
   async execute(interaction) {
     if (!isGerenteOuLider(interaction.member)) {
@@ -19,10 +19,10 @@ module.exports = {
       });
     }
 
-    if (!canUsePainelHere("farm", interaction.channelId)) {
+    if (!canUsePainelHere("farm", interaction.channel)) {
       return interaction.reply({
         content: [
-          "❌ Este painel só pode ser enviado no fórum de comandos ou no canal de dinheiro sujo.",
+          "❌ Este painel só pode ser enviado no fórum de comandos ou nos canais da área FARM.",
           `📍 Canais permitidos: ${getAllowedChannelMentions("farm") || "configure no config.js"}`
         ].join("\n"),
         flags: 64
@@ -32,7 +32,7 @@ module.exports = {
     await interaction.channel.send(criarPainelFarm());
 
     return interaction.reply({
-      content: "✅ Painel de dinheiro sujo enviado neste canal.",
+      content: "✅ Painel de farm enviado neste canal.",
       flags: 64
     });
   }

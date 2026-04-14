@@ -20,7 +20,8 @@ function getPainelMap() {
       canais.farm,
       canais.canalFarm,
       canais.dinheiroSujo,
-      canais.canalDinheiroSujo
+      canais.canalDinheiroSujo,
+      canais.metaSemanal
     ]),
     bau: unique([
       ...getForumChannelIds(),
@@ -51,10 +52,47 @@ function getPainelMap() {
   };
 }
 
-function canUsePainelHere(tipo, channelId) {
+function getPainelCategoryMap() {
+  return {
+    farm: unique([
+      canais.categoriaFarm,
+      canais.categoriaFarmPrivado
+    ]),
+    bau: unique([
+      canais.categoriaBau,
+      canais.categoriaGerencia
+    ]),
+    controle_bau: unique([
+      canais.categoriaControleBau
+    ]),
+    registro: unique([
+      canais.categoriaRegistro
+    ]),
+    avisos: unique([
+      canais.categoriaAvisos
+    ]),
+    gerencia: unique([
+      canais.categoriaGerencia
+    ])
+  };
+}
+
+function canUsePainelHere(tipo, channel) {
+  if (!channel) return false;
+
   const mapa = getPainelMap();
+  const categorias = getPainelCategoryMap();
+
   const permitidos = mapa[tipo] || [];
-  return permitidos.includes(String(channelId));
+  const categoriasPermitidas = categorias[tipo] || [];
+
+  const channelId = String(channel.id);
+  const parentId = channel.parentId ? String(channel.parentId) : null;
+
+  if (permitidos.includes(channelId)) return true;
+  if (parentId && categoriasPermitidas.includes(parentId)) return true;
+
+  return false;
 }
 
 function getAllowedChannelMentions(tipo) {
