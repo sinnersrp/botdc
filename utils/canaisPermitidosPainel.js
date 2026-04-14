@@ -8,15 +8,6 @@ function normalizeName(name = "") {
     .trim();
 }
 
-function sameName(channel, expected) {
-  return normalizeName(channel?.name) === normalizeName(expected);
-}
-
-function isInCategory(channel, categoryIds = []) {
-  if (!channel?.parentId) return false;
-  return categoryIds.map(String).includes(String(channel.parentId));
-}
-
 function isForum(channel) {
   const forumIds = [
     canais.forumComandoBot,
@@ -35,31 +26,35 @@ function canUsePainelHere(tipo, channel) {
 
   if (isForum(channel)) return true;
 
-  const categoriaFarm = ["1480507566302691412"];
-  const categoriaControleBau = ["1480507568265760812", "1480507568265760814"];
-  const categoriaBauGerencia = ["1486811209565995169", "1486811278281408512"];
+  const channelId = String(channel.id);
+  const channelName = normalizeName(channel.name);
 
   switch (tipo) {
     case "registro":
-      return String(channel.id) === "1480507565770018849";
+      return channelId === "1480507565770018849";
 
     case "avisos":
-      return String(channel.id) === "1480507565770018851";
+      return channelId === "1480507565770018851";
 
     case "farm":
-      if (String(channel.id) === "1480507566302691413") return true; // meta-semanal
-      return isInCategory(channel, categoriaFarm);
+      if (channelId === "1480507566302691413") return true; // meta-semanal
+      if (String(channel.parentId || "") === "1480507566302691412") return true; // área farm
+      return false;
 
     case "bau":
       return (
-        isInCategory(channel, categoriaBauGerencia) &&
-        (sameName(channel, "entrada-bau") || sameName(channel, "saida-bau"))
+        channelId === "1486811209565995169" || // entrada-bau
+        channelId === "1486811278281408512" || // saida-bau
+        channelName === "entrada-bau" ||
+        channelName === "saida-bau"
       );
 
     case "controle_bau":
       return (
-        isInCategory(channel, categoriaControleBau) &&
-        (sameName(channel, "entrada") || sameName(channel, "saida"))
+        channelId === "1480507568265760812" || // entrada
+        channelId === "1480507568265760814" || // saida
+        channelName === "entrada" ||
+        channelName === "saida"
       );
 
     default:
