@@ -1,13 +1,5 @@
 const { canais } = require("../config/config");
 
-function normalizeName(name = "") {
-  return String(name)
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim();
-}
-
 function isForum(channel) {
   const forumIds = [
     canais.forumComandoBot,
@@ -27,7 +19,7 @@ function canUsePainelHere(tipo, channel) {
   if (isForum(channel)) return true;
 
   const channelId = String(channel.id);
-  const channelName = normalizeName(channel.name);
+  const parentId = channel.parentId ? String(channel.parentId) : "";
 
   switch (tipo) {
     case "registro":
@@ -37,24 +29,21 @@ function canUsePainelHere(tipo, channel) {
       return channelId === "1480507565770018851";
 
     case "farm":
-      if (channelId === "1480507566302691413") return true; // meta-semanal
-      if (String(channel.parentId || "") === "1480507566302691412") return true; // área farm
-      return false;
+      return (
+        channelId === "1480507566302691413" || // meta-semanal
+        parentId === "1480507566302691412"     // canais da área farm
+      );
 
     case "bau":
       return (
         channelId === "1486811209565995169" || // entrada-bau
-        channelId === "1486811278281408512" || // saida-bau
-        channelName === "entrada-bau" ||
-        channelName === "saida-bau"
+        channelId === "1486811278281408512"    // saida-bau
       );
 
     case "controle_bau":
       return (
         channelId === "1480507568265760812" || // entrada
-        channelId === "1480507568265760814" || // saida
-        channelName === "entrada" ||
-        channelName === "saida"
+        channelId === "1480507568265760814"    // saida
       );
 
     default:
@@ -71,7 +60,7 @@ function getAllowedText(tipo) {
     case "farm":
       return "fórum comando-bot, meta-semanal ou canais da área FARM";
     case "bau":
-      return "fórum comando-bot ou canais entrada-bau / saida-bau do baú gerência";
+      return "fórum comando-bot ou canais entrada-bau / saida-bau";
     case "controle_bau":
       return "fórum comando-bot ou canais entrada / saida do controle de baú";
     default:
