@@ -8,8 +8,7 @@ function getForumChannelIds() {
   return unique([
     canais.forumComandoBot,
     canais.comandoBotForum,
-    canais.comandoBot,
-    "1492991343948070922"
+    canais.comandoBot
   ]);
 }
 
@@ -37,19 +36,15 @@ function getPainelMap() {
       ...getForumChannelIds(),
       canais.registro,
       canais.canalRegistro,
-      canais.canalRegistroDiscord,
-      "1480507565770018849"
+      canais.canalRegistroDiscord
     ]),
     avisos: unique([
       ...getForumChannelIds(),
       canais.avisos,
-      canais.canalAvisos,
-      "1480507565770018851"
+      canais.canalAvisos
     ]),
     gerencia: unique([
-      ...getForumChannelIds(),
-      canais.gerencia,
-      canais.canalGerencia
+      ...getForumChannelIds()
     ])
   };
 }
@@ -62,10 +57,12 @@ function getPainelCategoryMap() {
     ]),
     bau: unique([
       canais.categoriaBau,
-      canais.categoriaGerencia
+      canais.categoriaGerencia,
+      canais.categoriaGerenciaExtra
     ]),
     controle_bau: unique([
-      canais.categoriaControleBau
+      canais.categoriaControleBau,
+      canais.categoriaControleBauExtra
     ]),
     registro: unique([
       canais.categoriaRegistro
@@ -74,7 +71,8 @@ function getPainelCategoryMap() {
       canais.categoriaAvisos
     ]),
     gerencia: unique([
-      canais.categoriaGerencia
+      canais.categoriaGerencia,
+      canais.categoriaGerenciaExtra
     ])
   };
 }

@@ -1,97 +1,88 @@
+const cargos = {
+  gerenteGeral: process.env.CARGO_GERENTE_GERAL || "",
+  gerenteFarm: process.env.CARGO_GERENTE_FARM || "",
+  gerenteBau: process.env.CARGO_GERENTE_BAU || "",
+  gerenteAcao: process.env.CARGO_GERENTE_ACAO || "",
+  lider: process.env.CARGO_LIDER || "",
+  membro: process.env.CARGO_MEMBRO || "",
+  developer: process.env.CARGO_DEVELOPER || ""
+};
+
+const canais = {
+  forumComandoBot: "1492991343948070922",
+  comandoBot: "1492991343948070922",
+  comandoBotForum: "1492991343948070922",
+
+  categoriaBot: "1492979624278364230",
+
+  farm: "1480507566302691413",
+  canalFarm: "1480507566302691413",
+  dinheiroSujo: "1480507566302691413",
+  canalDinheiroSujo: "1480507566302691413",
+  metaSemanal: "1480507566302691413",
+
+  categoriaFarm: "1480507566302691412",
+  categoriaFarmPrivado: "1480507566302691412",
+
+  controleBau: "",
+  canalControleBau: "",
+  categoriaControleBau: "1480507568265760812",
+
+  categoriaControleBauExtra: "1480507568265760814",
+
+  registro: "1480507565770018849",
+  canalRegistro: "1480507565770018849",
+  canalRegistroDiscord: "1480507565770018849",
+  categoriaRegistro: "1480507565770018849",
+
+  avisos: "1480507565770018851",
+  canalAvisos: "1480507565770018851",
+  categoriaAvisos: "1480507565770018851",
+
+  bauGerencia: "",
+  canalBauGerencia: "",
+  categoriaBau: "1486811209565995169",
+  categoriaGerencia: "1486811209565995169",
+  categoriaGerenciaExtra: "1486811278281408512",
+
+  comprovanteFarm: "1487959772870348870",
+  categoriaComprovanteFarm: "1487959772870348870",
+
+  logs: "1480507568265760809",
+  categoriaLogs: "1480507568265760809"
+};
+
+const itensGerais = [
+  "maconha",
+  "metafetamina",
+  "cocaina",
+  "chip ilegal",
+  "lockpick",
+  "hacking",
+  "attachs",
+  "colete",
+  "algema",
+  "capuz",
+  "envelope",
+  "adrenalina",
+  "bandagem"
+];
+
+const itensArmas = [
+  "sub",
+  "fiveseven",
+  "hhk",
+  "mp5",
+  "g36",
+  "c4",
+  "muni pt",
+  "muni sub",
+  "muni de refle"
+];
+
 module.exports = {
-  canais: {
-    registro: "1480507565770018849",
-    painelAvisos: "1480507565770018851",
-
-    categoriaGerencia: "1492979624278364230",
-    forumComandoBot: "1492991343948070922",
-
-    entrada: "1480507568265760812",
-    saida: "1480507568265760814",
-    entradaArma: "1480507568265760812",
-    saidaArma: "1480507568265760814",
-
-    entradaBauGerencia: "1486811209565995169",
-    saidaBauGerencia: "1486811278281408512",
-
-    testeBot: "1487959772870348870",
-    log: "1480507568265760809",
-    logFarm: "1487959772870348870",
-
-    metaSemanal: "1480507566302691413",
-    categoriaFarmPrivado: "1480507566302691412",
-    chatGerencia: "1480507567913304101"
-  },
-
-  cargosLiberacao: [
-    "1480507564251942969",
-    "1480507564251942968",
-    "1480507564251942967",
-    "1480507564251942966",
-    "1480507564251942964",
-    "1480507564251942963",
-    "1480507564189024266"
-  ],
-
-  cargosMembro: [
-    "1480507564189024262",
-    "1488281802446733382",
-    "1480507564189024264"
-  ],
-
-  cargoMembroPadrao: "1480507564189024262",
-  cargoAmigos: "1480507564189024259",
-
-  itensGerais: [
-    "maconha",
-    "metafetamina",
-    "cocaina",
-    "attachs",
-    "colete",
-    "algema",
-    "envelope",
-    "lockpick",
-    "chip ilegal",
-    "adrenalina",
-    "bandagem",
-    "hacking",
-    "capuz"
-  ],
-
-  itensArmas: [
-    "muni pt",
-    "muni sub",
-    "muni de refle",
-    "sub",
-    "fiveseven",
-    "hhk",
-    "c4",
-    "mp5",
-    "g36"
-  ],
-
-  todosItens: [
-    "maconha",
-    "metafetamina",
-    "cocaina",
-    "attachs",
-    "colete",
-    "algema",
-    "envelope",
-    "lockpick",
-    "chip ilegal",
-    "adrenalina",
-    "bandagem",
-    "hacking",
-    "capuz",
-    "muni pt",
-    "muni sub",
-    "muni de refle",
-    "sub",
-    "fiveseven",
-    "hhk",
-    "c4",
-    "mp5",
-    "g36"
-  ]
+  cargos,
+  canais,
+  itensGerais,
+  itensArmas
 };
