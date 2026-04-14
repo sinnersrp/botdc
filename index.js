@@ -6,6 +6,7 @@ const path = require("path");
 
 const { iniciarFarmScheduler } = require("./tasks/farmScheduler");
 const { iniciarAvisoScheduler } = require("./tasks/avisoScheduler");
+const { iniciarResumoDiarioScheduler } = require("./tasks/resumoDiarioScheduler");
 const { processarSaidaOuRetorno } = require("./utils/saidaMembro");
 const { sincronizarPlanilhaFarm } = require("./utils/googleSheetsFarm");
 
@@ -19,12 +20,15 @@ const {
 const {
   BAU_BUTTON_ENTRADA,
   BAU_BUTTON_SAIDA,
+  BAU_BUTTON_TRANSFERIR,
   BAU_BUTTON_VER,
   BAU_SELECT_ENTRADA,
   BAU_SELECT_SAIDA,
+  BAU_SELECT_TRANSFERIR,
   BAU_MODAL_PREFIX,
   abrirSelecaoEntradaBau,
   abrirSelecaoSaidaBau,
+  abrirSelecaoTransferirBau,
   processarModalBauGerencia,
   processarSelecaoBauGerencia,
   verEstoqueBauGerencia
@@ -107,8 +111,10 @@ if (fs.existsSync(commandsPath)) {
 
 client.once("clientReady", async () => {
   console.log(`✅ Bot online como ${client.user.tag}`);
+
   iniciarFarmScheduler(client);
   iniciarAvisoScheduler(client);
+  iniciarResumoDiarioScheduler(client);
 
   try {
     const guildId = process.env.GUILD_ID;
@@ -158,6 +164,11 @@ client.on("interactionCreate", async (interaction) => {
 
       if (interaction.customId === BAU_BUTTON_SAIDA) {
         await abrirSelecaoSaidaBau(interaction);
+        return;
+      }
+
+      if (interaction.customId === BAU_BUTTON_TRANSFERIR) {
+        await abrirSelecaoTransferirBau(interaction);
         return;
       }
 
@@ -223,9 +234,10 @@ client.on("interactionCreate", async (interaction) => {
 
       if (
         interaction.customId === BAU_SELECT_ENTRADA ||
-        interaction.customId === BAU_SELECT_SAIDA
+        interaction.customId === BAU_SELECT_SAIDA ||
+        interaction.customId === BAU_SELECT_TRANSFERIR
       ) {
-        await processarSelecaoBauGerencia(interaction);
+        await processarSelecaoBauGerencia(interaction, client);
         return;
       }
 
@@ -265,12 +277,12 @@ client.on("interactionCreate", async (interaction) => {
       }
 
       if (interaction.customId.startsWith(`${BAU_MODAL_PREFIX}:`)) {
-        await processarModalBauGerencia(interaction);
+        await processarModalBauGerencia(interaction, client);
         return;
       }
 
       if (interaction.customId.startsWith(`${CONTROLE_MODAL_PREFIX}:`)) {
-        await processarModalControleBau(interaction, client);
+        await processarModalControleBau(interaction);
         return;
       }
 
