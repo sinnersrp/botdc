@@ -13,13 +13,16 @@ const MovimentacaoBau = require("../models/MovimentacaoBau");
 const { podeUsarBauGerencia } = require("./permissoes");
 const { itensGerais, itensArmas } = require("../config/config");
 const { isForumComandoBot, criarLinkCanal } = require("./redirecionamentoForum");
+const { enviarLogBonito, criarCampo, formatNumber } = require("./logMovimentacaoBonita");
 
 const BAU_BUTTON_ENTRADA = "bau_gerencia_entrada";
 const BAU_BUTTON_SAIDA = "bau_gerencia_saida";
+const BAU_BUTTON_TRANSFERIR = "bau_gerencia_transferir";
 const BAU_BUTTON_VER = "bau_gerencia_ver";
 
 const BAU_SELECT_ENTRADA = "bau_gerencia_select_entrada";
 const BAU_SELECT_SAIDA = "bau_gerencia_select_saida";
+const BAU_SELECT_TRANSFERIR = "bau_gerencia_select_transferir";
 
 const BAU_MODAL_PREFIX = "bau_gerencia_modal";
 
@@ -72,6 +75,7 @@ function canalEhSaida(channelId) {
 function validarCanalPorAcao(acao, channelId) {
   if (acao === "entrada") return canalEhEntrada(channelId);
   if (acao === "saida") return canalEhSaida(channelId);
+  if (acao === "transferir") return canalEhSaida(channelId);
   if (acao === "ver") return canalEhEntrada(channelId) || canalEhSaida(channelId);
   return false;
 }
@@ -83,6 +87,10 @@ function mensagemCanalInvalido(acao) {
 
   if (acao === "saida") {
     return "❌ Use este painel no canal de **saida-bau** da gerência para retirar itens do estoque principal.";
+  }
+
+  if (acao === "transferir") {
+    return "❌ Use este painel no canal de **saida-bau** da gerência para transferir itens para o controle de baú.";
   }
 
   return "❌ Use este painel no canal correto do baú da gerência.";
@@ -102,7 +110,13 @@ function responderRedirecionamentoForum(interaction, acao) {
   if (acao === "saida") {
     canalId = CANAL_BAU_SAIDA;
     titulo = "📤 Saída no baú da gerência";
-    descricao = "Use esta ação para retirar itens do estoque principal e depois liberar aos poucos no controle de baú.";
+    descricao = "Use esta ação para retirar itens do estoque principal.";
+  }
+
+  if (acao === "transferir") {
+    canalId = CANAL_BAU_SAIDA;
+    titulo = "🔄 Transferir para controle";
+    descricao = "Use esta ação para tirar do baú da gerência e colocar direto no controle de baú.";
   }
 
   if (acao === "ver") {
@@ -156,6 +170,7 @@ function criarPainelBau() {
         "**Regras deste painel:**",
         "• **Entrada no baú** → canal **entrada-bau**",
         "• **Saída no baú** → canal **saida-bau**",
+        "• **Transferir p/ Controle** → canal **saida-bau**",
         "• **Ver estoque** → funciona nos dois",
         "",
         "No **fórum**, os botões viram atalhos para abrir o canal certo."
@@ -164,7 +179,7 @@ function criarPainelBau() {
     .setFooter({ text: "SINNERS BOT • Baú da Gerência" })
     .setTimestamp();
 
-  const row = new ActionRowBuilder().addComponents(
+  const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(BAU_BUTTON_ENTRADA)
       .setLabel("Entrada no baú")
@@ -176,15 +191,23 @@ function criarPainelBau() {
       .setEmoji("📤")
       .setStyle(ButtonStyle.Danger),
     new ButtonBuilder()
+      .setCustomId(BAU_BUTTON_TRANSFERIR)
+      .setLabel("Transferir p/ Controle")
+      .setEmoji("🔄")
+      .setStyle(ButtonStyle.Primary)
+  );
+
+  const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
       .setCustomId(BAU_BUTTON_VER)
       .setLabel("Ver estoque")
       .setEmoji("📋")
-      .setStyle(ButtonStyle.Primary)
+      .setStyle(ButtonStyle.Secondary)
   );
 
   return {
     embeds: [embed],
-    components: [row]
+    components: [row1, row2]
   };
 }
 
@@ -254,7 +277,40 @@ async function abrirSelecaoSaidaBau(interaction) {
   });
 }
 
-async function processarSelecaoBauGerencia(interaction) {
+async function abrirSelecaoTransferirBau(interaction) {
+  if (!podeUsarBauGerencia(interaction.member)) {
+    return interaction.reply({
+      content: "❌ Apenas 01, 02, 03 e gerente geral podem usar este painel.",
+      flags: 64
+    });
+  }
+
+  if (isForumComandoBot(interaction.channel)) {
+    return responderRedirecionamentoForum(interaction, "transferir");
+  }
+
+  if (!validarCanalPorAcao("transferir", interaction.channelId)) {
+    return interaction.reply({
+      content: mensagemCanalInvalido("transferir"),
+      flags: 64
+    });
+  }
+
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(BAU_SELECT_TRANSFERIR)
+    .setPlaceholder("Selecione o item para transferir")
+    .addOptions(criarOpcoesItens());
+
+  const row = new ActionRowBuilder().addComponents(select);
+
+  return interaction.reply({
+    content: "Selecione o item que será transferido para o controle de baú.",
+    components: [row],
+    flags: 64
+  });
+}
+
+async function processarSelecaoBauGerencia(interaction, client) {
   if (!podeUsarBauGerencia(interaction.member)) {
     return interaction.reply({
       content: "❌ Você não tem permissão para esta ação.",
@@ -263,7 +319,11 @@ async function processarSelecaoBauGerencia(interaction) {
   }
 
   const item = interaction.values?.[0];
-  const acao = interaction.customId === BAU_SELECT_ENTRADA ? "entrada" : "saida";
+  let acao = "";
+
+  if (interaction.customId === BAU_SELECT_ENTRADA) acao = "entrada";
+  if (interaction.customId === BAU_SELECT_SAIDA) acao = "saida";
+  if (interaction.customId === BAU_SELECT_TRANSFERIR) acao = "transferir";
 
   if (!validarCanalPorAcao(acao, interaction.channelId)) {
     return interaction.reply({
@@ -274,7 +334,7 @@ async function processarSelecaoBauGerencia(interaction) {
 
   const modal = new ModalBuilder()
     .setCustomId(`${BAU_MODAL_PREFIX}:${acao}:${item}`)
-    .setTitle(`Baú da Gerência • ${acao === "entrada" ? "Entrada" : "Saída"}`);
+    .setTitle(`Baú da Gerência • ${acao}`);
 
   const quantidade = new TextInputBuilder()
     .setCustomId("quantidade")
@@ -300,7 +360,7 @@ async function processarSelecaoBauGerencia(interaction) {
   return interaction.showModal(modal);
 }
 
-async function processarModalBauGerencia(interaction) {
+async function processarModalBauGerencia(interaction, client) {
   if (!podeUsarBauGerencia(interaction.member)) {
     return interaction.reply({
       content: "❌ Você não tem permissão para esta ação.",
@@ -331,43 +391,151 @@ async function processarModalBauGerencia(interaction) {
   const itemDb = getItemDb(itemNormalizado);
   const tipo = getTipoItem(itemNormalizado);
 
-  let registro = await ControleBau.findOne({ item: itemDb });
+  let registroGerencia = await ControleBau.findOne({ item: itemDb });
 
-  if (!registro) {
-    registro = new ControleBau({
+  if (!registroGerencia) {
+    registroGerencia = new ControleBau({
       item: itemDb,
       quantidade: 0,
       tipo
     });
   }
 
-  if (acao === "saida" && registro.quantidade < quantidade) {
+  if ((acao === "saida" || acao === "transferir") && registroGerencia.quantidade < quantidade) {
     return interaction.reply({
-      content: `❌ Estoque insuficiente. Atual: **${formatarQuantidade(registro.quantidade)}**`,
+      content: `❌ Estoque insuficiente. Atual: **${formatarQuantidade(registroGerencia.quantidade)}**`,
       flags: 64
     });
   }
 
-  if (acao === "entrada") registro.quantidade += quantidade;
-  if (acao === "saida") registro.quantidade -= quantidade;
+  if (acao === "entrada") {
+    registroGerencia.quantidade += quantidade;
+    await registroGerencia.save();
 
-  await registro.save();
+    await MovimentacaoBau.create({
+      userId: interaction.user.id,
+      username: interaction.user.username,
+      item: itemDb,
+      itemOriginal: itemNormalizado,
+      quantidade,
+      tipoMovimentacao: acao,
+      observacao,
+      canalId: interaction.channelId,
+      registradoEm: new Date()
+    });
 
-  await MovimentacaoBau.create({
-    userId: interaction.user.id,
-    username: interaction.user.username,
-    item: itemDb,
-    itemOriginal: itemNormalizado,
-    quantidade,
-    tipoMovimentacao: acao,
-    observacao,
-    canalId: interaction.channelId,
-    registradoEm: new Date()
-  });
+    await enviarLogBonito(client, {
+      color: 0x57f287,
+      title: "📥 Entrada no Baú da Gerência",
+      description: "Produto recebido dos fornecedores e registrado no estoque principal.",
+      fields: [
+        criarCampo("📦 Item", `**${formatarNomeBonito(itemNormalizado)}**`),
+        criarCampo("🔢 Quantidade", `**${formatarQuantidade(quantidade)}**`),
+        criarCampo("📊 Estoque atual", `**${formatarQuantidade(registroGerencia.quantidade)}**`),
+        criarCampo("👤 Responsável", `**${interaction.user.username}**`),
+        criarCampo("📝 Observação", observacao, false)
+      ]
+    });
+  }
+
+  if (acao === "saida") {
+    registroGerencia.quantidade -= quantidade;
+    await registroGerencia.save();
+
+    await MovimentacaoBau.create({
+      userId: interaction.user.id,
+      username: interaction.user.username,
+      item: itemDb,
+      itemOriginal: itemNormalizado,
+      quantidade,
+      tipoMovimentacao: acao,
+      observacao,
+      canalId: interaction.channelId,
+      registradoEm: new Date()
+    });
+
+    await enviarLogBonito(client, {
+      color: 0xed4245,
+      title: "📤 Saída no Baú da Gerência",
+      description: "Item retirado do estoque principal.",
+      fields: [
+        criarCampo("📦 Item", `**${formatarNomeBonito(itemNormalizado)}**`),
+        criarCampo("🔢 Quantidade", `**${formatarQuantidade(quantidade)}**`),
+        criarCampo("📊 Estoque atual", `**${formatarQuantidade(registroGerencia.quantidade)}**`),
+        criarCampo("👤 Responsável", `**${interaction.user.username}**`),
+        criarCampo("📝 Observação", observacao, false)
+      ]
+    });
+  }
+
+  if (acao === "transferir") {
+    registroGerencia.quantidade -= quantidade;
+    await registroGerencia.save();
+
+    let registroControle = await ControleBau.findOne({ item: itemNormalizado });
+
+    if (!registroControle) {
+      registroControle = new ControleBau({
+        item: itemNormalizado,
+        quantidade: 0,
+        tipo
+      });
+    }
+
+    registroControle.quantidade += quantidade;
+    await registroControle.save();
+
+    await MovimentacaoBau.create({
+      userId: interaction.user.id,
+      username: interaction.user.username,
+      item: itemDb,
+      itemOriginal: itemNormalizado,
+      quantidade,
+      tipoMovimentacao: "transferencia_controle",
+      observacao,
+      canalId: interaction.channelId,
+      registradoEm: new Date()
+    });
+
+    await MovimentacaoBau.create({
+      userId: interaction.user.id,
+      username: interaction.user.username,
+      item: itemNormalizado,
+      quantidade,
+      tipoMovimentacao: "liberar",
+      observacao: `TRANSFERIDO DA GERÊNCIA: ${observacao}`,
+      canalId: interaction.channelId,
+      registradoEm: new Date()
+    });
+
+    await enviarLogBonito(client, {
+      color: 0x5865f2,
+      title: "🔄 Transferência para o Controle de Baú",
+      description: "Item saiu do baú da gerência e entrou no controle de baú.",
+      fields: [
+        criarCampo("📦 Item", `**${formatarNomeBonito(itemNormalizado)}**`),
+        criarCampo("🔢 Quantidade", `**${formatarQuantidade(quantidade)}**`),
+        criarCampo("📉 Gerência agora", `**${formatarQuantidade(registroGerencia.quantidade)}**`),
+        criarCampo("📈 Controle agora", `**${formatarQuantidade(registroControle.quantidade)}**`),
+        criarCampo("👤 Responsável", `**${interaction.user.username}**`),
+        criarCampo("📝 Observação", observacao, false)
+      ]
+    });
+  }
 
   const embed = new EmbedBuilder()
-    .setColor(acao === "entrada" ? 0x57f287 : 0xed4245)
-    .setTitle(`✅ ${acao === "entrada" ? "Entrada" : "Saída"} registrada`)
+    .setColor(
+      acao === "entrada" ? 0x57f287 :
+      acao === "saida" ? 0xed4245 :
+      0x5865f2
+    )
+    .setTitle(
+      acao === "entrada"
+        ? "✅ Entrada registrada"
+        : acao === "saida"
+        ? "✅ Saída registrada"
+        : "✅ Transferência realizada"
+    )
     .addFields(
       {
         name: "📦 Item",
@@ -380,8 +548,8 @@ async function processarModalBauGerencia(interaction) {
         inline: true
       },
       {
-        name: "📊 Estoque atual",
-        value: `**${formatarQuantidade(registro.quantidade)}**`,
+        name: "📊 Estoque gerência",
+        value: `**${formatarQuantidade(registroGerencia.quantidade)}**`,
         inline: true
       },
       {
@@ -450,12 +618,15 @@ async function verEstoqueBauGerencia(interaction) {
 module.exports = {
   BAU_BUTTON_ENTRADA,
   BAU_BUTTON_SAIDA,
+  BAU_BUTTON_TRANSFERIR,
   BAU_BUTTON_VER,
   BAU_SELECT_ENTRADA,
   BAU_SELECT_SAIDA,
+  BAU_SELECT_TRANSFERIR,
   BAU_MODAL_PREFIX,
   abrirSelecaoEntradaBau,
   abrirSelecaoSaidaBau,
+  abrirSelecaoTransferirBau,
   processarModalBauGerencia,
   processarSelecaoBauGerencia,
   verEstoqueBauGerencia,
