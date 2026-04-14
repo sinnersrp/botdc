@@ -2,7 +2,7 @@ const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const { isGerenteOuLider } = require("../utils/permissoes");
 const {
   canUsePainelHere,
-  getAllowedChannelMentions
+  getAllowedText
 } = require("../utils/canaisPermitidosPainel");
 
 function criarPainelGerencia() {
@@ -36,17 +36,14 @@ module.exports = {
   async execute(interaction) {
     if (!isGerenteOuLider(interaction.member)) {
       return interaction.reply({
-        content: "❌ Apenas a gerência pode usar este comando.",
+        content: "❌ Apenas a liderança pode enviar este painel.",
         flags: 64
       });
     }
 
     if (!canUsePainelHere("gerencia", interaction.channel)) {
       return interaction.reply({
-        content: [
-          "❌ Este painel só pode ser enviado no fórum de comandos ou nos canais da área de gerência.",
-          `📍 Canais permitidos: ${getAllowedChannelMentions("gerencia") || "configure no config.js"}`
-        ].join("\n"),
+        content: `❌ Este painel só pode ser enviado em: ${getAllowedText("gerencia")}.`,
         flags: 64
       });
     }
