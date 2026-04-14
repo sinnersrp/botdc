@@ -36,7 +36,9 @@ function getPainelMap() {
     registro: unique([
       ...getForumChannelIds(),
       canais.registro,
-      canais.canalRegistro
+      canais.canalRegistro,
+      canais.canalRegistroDiscord,
+      "1480507565770018849"
     ]),
     avisos: unique([
       ...getForumChannelIds(),

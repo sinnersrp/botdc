@@ -1,68 +1,38 @@
-const {
-  SlashCommandBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  EmbedBuilder
-} = require("discord.js");
+const { SlashCommandBuilder } = require("discord.js");
+const { criarPainelRegistro } = require("../utils/registroMembro");
 const { isGerenteOuLider } = require("../utils/permissoes");
-const { REGISTRO_BUTTON_ID } = require("../utils/registroMembro");
-const { enviarPainelNoForum } = require("../utils/forumPainel");
-
-function criarPainelRegistroForum() {
-  const embed = new EmbedBuilder()
-    .setColor(0x8e44ad)
-    .setTitle("📋 Registro de Novo Membro")
-    .setDescription(
-      [
-        "Clique no botão abaixo para preencher seu registro.",
-        "",
-        "**Preencha corretamente:**",
-        "• Nome",
-        "• Passaporte",
-        "• Número em game"
-      ].join("\n")
-    )
-    .setFooter({
-      text: "SINNERS BOT • Registro"
-    })
-    .setTimestamp();
-
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(REGISTRO_BUTTON_ID)
-      .setLabel("Fazer registro")
-      .setEmoji("📝")
-      .setStyle(ButtonStyle.Success)
-  );
-
-  return {
-    embeds: [embed],
-    components: [row]
-  };
-}
+const {
+  canUsePainelHere,
+  getAllowedChannelMentions
+} = require("../utils/canaisPermitidosPainel");
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("painel-registro")
-    .setDescription("Envia o painel de registro no fórum comando-bot"),
+    .setDescription("Envia o painel de registro neste canal"),
 
   async execute(interaction) {
     if (!isGerenteOuLider(interaction.member)) {
       return interaction.reply({
-        content: "❌ Apenas gerente ou líder pode usar este comando.",
+        content: "❌ Apenas a gerência pode usar este comando.",
         flags: 64
       });
     }
 
-    await enviarPainelNoForum(
-      interaction.client,
-      "📋 Painel de Registro",
-      criarPainelRegistroForum()
-    );
+    if (!canUsePainelHere("registro", interaction.channel)) {
+      return interaction.reply({
+        content: [
+          "❌ Este painel só pode ser enviado no fórum de comandos ou nos canais da área de registro.",
+          `📍 Canais permitidos: ${getAllowedChannelMentions("registro") || "configure no config.js"}`
+        ].join("\n"),
+        flags: 64
+      });
+    }
+
+    await interaction.channel.send(criarPainelRegistro());
 
     return interaction.reply({
-      content: "✅ Painel de registro enviado no fórum comando-bot.",
+      content: "✅ Painel de registro enviado neste canal.",
       flags: 64
     });
   }

@@ -41,10 +41,10 @@ module.exports = {
       });
     }
 
-    if (!canUsePainelHere("gerencia", interaction.channelId)) {
+    if (!canUsePainelHere("gerencia", interaction.channel)) {
       return interaction.reply({
         content: [
-          "❌ Este painel só pode ser enviado no fórum de comandos ou em canal de gerência.",
+          "❌ Este painel só pode ser enviado no fórum de comandos ou nos canais da área de gerência.",
           `📍 Canais permitidos: ${getAllowedChannelMentions("gerencia") || "configure no config.js"}`
         ].join("\n"),
         flags: 64

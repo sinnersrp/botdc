@@ -19,10 +19,10 @@ module.exports = {
       });
     }
 
-    if (!canUsePainelHere("avisos", interaction.channelId)) {
+    if (!canUsePainelHere("avisos", interaction.channel)) {
       return interaction.reply({
         content: [
-          "❌ Este painel só pode ser enviado no fórum de comandos ou no canal de avisos.",
+          "❌ Este painel só pode ser enviado no fórum de comandos ou nos canais da área de avisos.",
           `📍 Canais permitidos: ${getAllowedChannelMentions("avisos") || "configure no config.js"}`
         ].join("\n"),
         flags: 64

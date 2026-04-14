@@ -19,10 +19,10 @@ module.exports = {
       });
     }
 
-    if (!canUsePainelHere("controle_bau", interaction.channelId)) {
+    if (!canUsePainelHere("controle_bau", interaction.channel)) {
       return interaction.reply({
         content: [
-          "❌ Este painel só pode ser enviado no fórum de comandos ou no canal de controle de baú.",
+          "❌ Este painel só pode ser enviado no fórum de comandos ou nos canais da área de controle de baú.",
           `📍 Canais permitidos: ${getAllowedChannelMentions("controle_bau") || "configure no config.js"}`
         ].join("\n"),
         flags: 64
