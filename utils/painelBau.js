@@ -12,6 +12,7 @@ const ControleBau = require("../models/ControleBau");
 const MovimentacaoBau = require("../models/MovimentacaoBau");
 const { podeUsarBauGerencia } = require("./permissoes");
 const { itensGerais, itensArmas } = require("../config/config");
+const { isForumComandoBot, criarLinkCanal } = require("./redirecionamentoForum");
 
 const BAU_BUTTON_ENTRADA = "bau_gerencia_entrada";
 const BAU_BUTTON_SAIDA = "bau_gerencia_saida";
@@ -69,31 +70,72 @@ function canalEhSaida(channelId) {
 }
 
 function validarCanalPorAcao(acao, channelId) {
-  if (acao === "entrada") {
-    return canalEhEntrada(channelId);
-  }
-
-  if (acao === "saida") {
-    return canalEhSaida(channelId);
-  }
-
-  if (acao === "ver") {
-    return canalEhEntrada(channelId) || canalEhSaida(channelId);
-  }
-
+  if (acao === "entrada") return canalEhEntrada(channelId);
+  if (acao === "saida") return canalEhSaida(channelId);
+  if (acao === "ver") return canalEhEntrada(channelId) || canalEhSaida(channelId);
   return false;
 }
 
 function mensagemCanalInvalido(acao) {
   if (acao === "entrada") {
-    return "❌ Use este painel no canal de **entrada-bau** da gerência para adicionar item.";
+    return "❌ Use este painel no canal de **entrada-bau** da gerência para registrar produtos recebidos dos fornecedores.";
   }
 
   if (acao === "saida") {
-    return "❌ Use este painel no canal de **saida-bau** da gerência para retirar item.";
+    return "❌ Use este painel no canal de **saida-bau** da gerência para retirar itens do estoque principal.";
   }
 
   return "❌ Use este painel no canal correto do baú da gerência.";
+}
+
+function responderRedirecionamentoForum(interaction, acao) {
+  let canalId = "";
+  let titulo = "";
+  let descricao = "";
+
+  if (acao === "entrada") {
+    canalId = CANAL_BAU_ENTRADA;
+    titulo = "📥 Entrada no baú da gerência";
+    descricao = "Use esta ação para registrar tudo que a liderança recebeu dos fornecedores no estoque principal.";
+  }
+
+  if (acao === "saida") {
+    canalId = CANAL_BAU_SAIDA;
+    titulo = "📤 Saída no baú da gerência";
+    descricao = "Use esta ação para retirar itens do estoque principal e depois liberar aos poucos no controle de baú.";
+  }
+
+  if (acao === "ver") {
+    canalId = CANAL_BAU_ENTRADA;
+    titulo = "📋 Ver estoque do baú da gerência";
+    descricao = "Você pode consultar o estoque principal pelo canal de entrada-bau ou saida-bau.";
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle(titulo)
+    .setDescription(
+      [
+        descricao,
+        "",
+        "Clique no botão abaixo para abrir o canal certo."
+      ].join("\n")
+    )
+    .setFooter({ text: "SINNERS BOT • Redirecionamento" })
+    .setTimestamp();
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setLabel("Abrir canal correto")
+      .setStyle(ButtonStyle.Link)
+      .setURL(criarLinkCanal(interaction.guild.id, canalId))
+  );
+
+  return interaction.reply({
+    embeds: [embed],
+    components: [row],
+    flags: 64
+  });
 }
 
 function criarPainelBau() {
@@ -102,12 +144,21 @@ function criarPainelBau() {
     .setTitle("📦 Painel do Baú da Gerência")
     .setDescription(
       [
-        "Use os botões abaixo para gerenciar o baú da gerência.",
+        "Este é o **estoque principal da facção**.",
+        "",
+        "Aqui a liderança registra tudo que recebe dos **fornecedores** antes de liberar aos membros.",
+        "",
+        "**Fluxo certo:**",
+        "1. fornecedor entrega",
+        "2. entra no **baú da gerência**",
+        "3. depois uma parte sai daqui para o **controle de baú**",
         "",
         "**Regras deste painel:**",
         "• **Entrada no baú** → canal **entrada-bau**",
         "• **Saída no baú** → canal **saida-bau**",
-        "• **Ver estoque** → funciona nos dois"
+        "• **Ver estoque** → funciona nos dois",
+        "",
+        "No **fórum**, os botões viram atalhos para abrir o canal certo."
       ].join("\n")
     )
     .setFooter({ text: "SINNERS BOT • Baú da Gerência" })
@@ -145,6 +196,10 @@ async function abrirSelecaoEntradaBau(interaction) {
     });
   }
 
+  if (isForumComandoBot(interaction.channel)) {
+    return responderRedirecionamentoForum(interaction, "entrada");
+  }
+
   if (!validarCanalPorAcao("entrada", interaction.channelId)) {
     return interaction.reply({
       content: mensagemCanalInvalido("entrada"),
@@ -172,6 +227,10 @@ async function abrirSelecaoSaidaBau(interaction) {
       content: "❌ Apenas 01, 02, 03 e gerente geral podem usar este painel.",
       flags: 64
     });
+  }
+
+  if (isForumComandoBot(interaction.channel)) {
+    return responderRedirecionamentoForum(interaction, "saida");
   }
 
   if (!validarCanalPorAcao("saida", interaction.channelId)) {
@@ -228,7 +287,7 @@ async function processarSelecaoBauGerencia(interaction) {
   const observacao = new TextInputBuilder()
     .setCustomId("observacao")
     .setLabel("Observação")
-    .setPlaceholder("Ex: reposição da gerência")
+    .setPlaceholder("Ex: fornecedor entregou / liberação para o controle")
     .setStyle(TextInputStyle.Paragraph)
     .setRequired(false)
     .setMaxLength(300);
@@ -348,6 +407,10 @@ async function verEstoqueBauGerencia(interaction) {
     });
   }
 
+  if (isForumComandoBot(interaction.channel)) {
+    return responderRedirecionamentoForum(interaction, "ver");
+  }
+
   if (!validarCanalPorAcao("ver", interaction.channelId)) {
     return interaction.reply({
       content: "❌ Use este painel nos canais entrada-bau ou saida-bau.",
@@ -375,7 +438,7 @@ async function verEstoqueBauGerencia(interaction) {
     .setColor(0x5865f2)
     .setTitle("📋 Estoque do Baú da Gerência")
     .setDescription(linhas.join("\n"))
-    .setFooter({ text: "SINNERS BOT • Estoque" })
+    .setFooter({ text: "SINNERS BOT • Estoque principal" })
     .setTimestamp();
 
   return interaction.reply({

@@ -12,6 +12,7 @@ const ControleBau = require("../models/ControleBau");
 const MovimentacaoBau = require("../models/MovimentacaoBau");
 const { podeUsarControleBau } = require("./permissoes");
 const { itensGerais, itensArmas } = require("../config/config");
+const { isForumComandoBot, criarLinkCanal } = require("./redirecionamentoForum");
 
 const CONTROLE_BUTTON_LIBERAR = "controle_bau_liberar";
 const CONTROLE_BUTTON_RETIRAR = "controle_bau_retirar";
@@ -67,39 +68,83 @@ function canalEhSaida(channelId) {
 }
 
 function validarCanalPorAcao(acao, channelId) {
-  if (acao === "liberar") {
-    return canalEhEntrada(channelId);
-  }
-
-  if (acao === "devolver") {
-    return canalEhEntrada(channelId);
-  }
-
-  if (acao === "retirar") {
-    return canalEhSaida(channelId);
-  }
-
-  if (acao === "ver") {
-    return canalEhEntrada(channelId) || canalEhSaida(channelId);
-  }
-
+  if (acao === "liberar") return canalEhEntrada(channelId);
+  if (acao === "devolver") return canalEhEntrada(channelId);
+  if (acao === "retirar") return canalEhSaida(channelId);
+  if (acao === "ver") return canalEhEntrada(channelId) || canalEhSaida(channelId);
   return false;
 }
 
 function mensagemCanalInvalido(acao) {
   if (acao === "liberar") {
-    return "❌ Use este painel no canal de **entrada** do controle de baú para liberar item.";
+    return "❌ Use este painel no canal de **entrada** do controle de baú para liberar item aos membros.";
   }
 
   if (acao === "devolver") {
-    return "❌ Use este painel no canal de **entrada** do controle de baú para devolver item ao baú.";
+    return "❌ Use este painel no canal de **entrada** do controle de baú para devolver item ao baú liberado.";
   }
 
   if (acao === "retirar") {
-    return "❌ Use este painel no canal de **saída** do controle de baú para retirar item.";
+    return "❌ Use este painel no canal de **saída** do controle de baú para registrar retirada dos membros.";
   }
 
   return "❌ Use este painel no canal correto do controle de baú.";
+}
+
+function responderRedirecionamentoForum(interaction, acao) {
+  let canalId = "";
+  let titulo = "";
+  let descricao = "";
+
+  if (acao === "liberar") {
+    canalId = CANAL_CONTROLE_ENTRADA;
+    titulo = "✅ Liberar item";
+    descricao = "Use esta ação para colocar no controle de baú os itens que a liderança liberou aos membros.";
+  }
+
+  if (acao === "devolver") {
+    canalId = CANAL_CONTROLE_ENTRADA;
+    titulo = "📥 Devolver item";
+    descricao = "Use esta ação quando algum item volta para o controle de baú.";
+  }
+
+  if (acao === "retirar") {
+    canalId = CANAL_CONTROLE_SAIDA;
+    titulo = "📤 Retirar item";
+    descricao = "Use esta ação para registrar a retirada que os membros fizeram do controle de baú.";
+  }
+
+  if (acao === "ver") {
+    canalId = CANAL_CONTROLE_ENTRADA;
+    titulo = "📋 Ver estoque";
+    descricao = "Você pode consultar o controle de baú pelo canal de entrada ou saída.";
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle(titulo)
+    .setDescription(
+      [
+        descricao,
+        "",
+        "Clique no botão abaixo para abrir o canal certo."
+      ].join("\n")
+    )
+    .setFooter({ text: "SINNERS BOT • Redirecionamento" })
+    .setTimestamp();
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setLabel("Abrir canal correto")
+      .setStyle(ButtonStyle.Link)
+      .setURL(criarLinkCanal(interaction.guild.id, canalId))
+  );
+
+  return interaction.reply({
+    embeds: [embed],
+    components: [row],
+    flags: 64
+  });
 }
 
 function criarPainelControleBau() {
@@ -108,13 +153,23 @@ function criarPainelControleBau() {
     .setTitle("📦 Painel do Controle de Baú")
     .setDescription(
       [
-        "Use os botões abaixo para movimentar o controle de baú.",
+        "Este é o **estoque liberado para os membros**.",
+        "",
+        "Aqui a liderança coloca aos poucos os itens que saíram do **baú da gerência** para uso da facção.",
+        "",
+        "**Fluxo certo:**",
+        "1. item sai do **baú da gerência**",
+        "2. item entra no **controle de baú**",
+        "3. membro retira para usar",
+        "4. se sobrar, devolve para o controle",
         "",
         "**Regras deste painel:**",
         "• **Liberar item** → canal **entrada**",
         "• **Devolver item** → canal **entrada**",
         "• **Retirar item** → canal **saída**",
-        "• **Ver estoque** → funciona nos dois"
+        "• **Ver estoque** → funciona nos dois",
+        "",
+        "No **fórum**, os botões viram atalhos para abrir o canal certo."
       ].join("\n")
     )
     .setFooter({ text: "SINNERS BOT • Controle de Baú" })
@@ -160,6 +215,10 @@ async function abrirSelecaoLiberar(interaction) {
     });
   }
 
+  if (isForumComandoBot(interaction.channel)) {
+    return responderRedirecionamentoForum(interaction, "liberar");
+  }
+
   if (!validarCanalPorAcao("liberar", interaction.channelId)) {
     return interaction.reply({
       content: mensagemCanalInvalido("liberar"),
@@ -189,6 +248,10 @@ async function abrirSelecaoRetirar(interaction) {
     });
   }
 
+  if (isForumComandoBot(interaction.channel)) {
+    return responderRedirecionamentoForum(interaction, "retirar");
+  }
+
   if (!validarCanalPorAcao("retirar", interaction.channelId)) {
     return interaction.reply({
       content: mensagemCanalInvalido("retirar"),
@@ -216,6 +279,10 @@ async function abrirSelecaoDevolver(interaction) {
       content: "❌ Você não tem permissão para usar este painel.",
       flags: 64
     });
+  }
+
+  if (isForumComandoBot(interaction.channel)) {
+    return responderRedirecionamentoForum(interaction, "devolver");
   }
 
   if (!validarCanalPorAcao("devolver", interaction.channelId)) {
@@ -276,7 +343,7 @@ async function processarSelecaoControleBau(interaction) {
   const observacao = new TextInputBuilder()
     .setCustomId("observacao")
     .setLabel("Observação")
-    .setPlaceholder("Ex: retirada para ação")
+    .setPlaceholder("Ex: ação da facção / devolução / retirada")
     .setStyle(TextInputStyle.Paragraph)
     .setRequired(false)
     .setMaxLength(300);
@@ -411,6 +478,10 @@ async function verEstoqueControleBau(interaction) {
     });
   }
 
+  if (isForumComandoBot(interaction.channel)) {
+    return responderRedirecionamentoForum(interaction, "ver");
+  }
+
   if (!validarCanalPorAcao("ver", interaction.channelId)) {
     return interaction.reply({
       content: "❌ Use este painel nos canais de entrada ou saída do controle de baú.",
@@ -437,7 +508,7 @@ async function verEstoqueControleBau(interaction) {
     .setColor(0x5865f2)
     .setTitle("📋 Estoque do Controle de Baú")
     .setDescription(linhas.join("\n"))
-    .setFooter({ text: "SINNERS BOT • Estoque" })
+    .setFooter({ text: "SINNERS BOT • Estoque liberado" })
     .setTimestamp();
 
   return interaction.reply({
