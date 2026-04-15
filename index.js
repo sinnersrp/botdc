@@ -35,15 +35,12 @@ const {
 } = require("./utils/painelBau");
 
 const {
-  CONTROLE_BUTTON_LIBERAR,
   CONTROLE_BUTTON_RETIRAR,
   CONTROLE_BUTTON_DEVOLVER,
   CONTROLE_BUTTON_VER,
-  CONTROLE_SELECT_LIBERAR,
   CONTROLE_SELECT_RETIRAR,
   CONTROLE_SELECT_DEVOLVER,
   CONTROLE_MODAL_PREFIX,
-  abrirSelecaoLiberar,
   abrirSelecaoRetirar,
   abrirSelecaoDevolver,
   processarModalControleBau,
@@ -151,8 +148,6 @@ client.on("messageCreate", async (message) => {
 client.on("interactionCreate", async (interaction) => {
   try {
     if (interaction.isButton()) {
-      console.log(`🔘 Botão clicado: ${interaction.customId} por ${interaction.user.tag}`);
-
       if (interaction.customId === REGISTRO_BUTTON_ID) {
         await abrirModalRegistro(interaction);
         return;
@@ -175,11 +170,6 @@ client.on("interactionCreate", async (interaction) => {
 
       if (interaction.customId === BAU_BUTTON_VER) {
         await verEstoqueBauGerencia(interaction);
-        return;
-      }
-
-      if (interaction.customId === CONTROLE_BUTTON_LIBERAR) {
-        await abrirSelecaoLiberar(interaction);
         return;
       }
 
@@ -239,8 +229,6 @@ client.on("interactionCreate", async (interaction) => {
     }
 
     if (interaction.isStringSelectMenu()) {
-      console.log(`📚 Menu selecionado: ${interaction.customId} por ${interaction.user.tag}`);
-
       if (
         interaction.customId === BAU_SELECT_ENTRADA ||
         interaction.customId === BAU_SELECT_SAIDA ||
@@ -251,7 +239,6 @@ client.on("interactionCreate", async (interaction) => {
       }
 
       if (
-        interaction.customId === CONTROLE_SELECT_LIBERAR ||
         interaction.customId === CONTROLE_SELECT_RETIRAR ||
         interaction.customId === CONTROLE_SELECT_DEVOLVER
       ) {
@@ -283,8 +270,6 @@ client.on("interactionCreate", async (interaction) => {
     }
 
     if (interaction.isModalSubmit()) {
-      console.log(`📝 Modal enviado: ${interaction.customId} por ${interaction.user.tag}`);
-
       if (interaction.customId === REGISTRO_MODAL_ID) {
         await processarModalRegistro(interaction);
         return;

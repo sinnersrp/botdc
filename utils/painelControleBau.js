@@ -15,12 +15,10 @@ const { itensGerais, itensArmas } = require("../config/config");
 const { isForumComandoBot, criarLinkCanal } = require("./redirecionamentoForum");
 const { enviarLogBonito, criarCampo } = require("./logMovimentacaoBonita");
 
-const CONTROLE_BUTTON_LIBERAR = "controle_bau_liberar";
 const CONTROLE_BUTTON_RETIRAR = "controle_bau_retirar";
 const CONTROLE_BUTTON_DEVOLVER = "controle_bau_devolver";
 const CONTROLE_BUTTON_VER = "controle_bau_ver";
 
-const CONTROLE_SELECT_LIBERAR = "controle_bau_select_liberar";
 const CONTROLE_SELECT_RETIRAR = "controle_bau_select_retirar";
 const CONTROLE_SELECT_DEVOLVER = "controle_bau_select_devolver";
 
@@ -28,6 +26,14 @@ const CONTROLE_MODAL_PREFIX = "controle_bau_modal";
 
 const CANAL_CONTROLE_ENTRADA = "1480507568265760812";
 const CANAL_CONTROLE_SAIDA = "1480507568265760814";
+
+function normalizarTexto(txt) {
+  return String(txt || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
 
 function normalizarItem(item) {
   return String(item || "").trim().toLowerCase();
@@ -50,58 +56,53 @@ function formatarQuantidade(valor) {
   return new Intl.NumberFormat("pt-BR").format(Number(valor) || 0);
 }
 
-function criarOpcoesItens() {
-  const todos = [...itensGerais, ...itensArmas];
-
-  return todos.slice(0, 25).map((item) => ({
-    label: formatarNomeBonito(item),
-    value: normalizarItem(item),
-    description: getTipoItem(item) === "arma" ? "Arma / munição" : "Produto geral"
+function criarOpcoesItensComEstoque(itens) {
+  return itens.slice(0, 25).map((registro) => ({
+    label: formatarNomeBonito(registro.item),
+    value: normalizarItem(registro.item),
+    description: `Estoque atual: ${formatarQuantidade(registro.quantidade)}`
   }));
 }
 
-function canalEhEntrada(channelId) {
-  return String(channelId) === CANAL_CONTROLE_ENTRADA;
+function canalEhEntrada(channel) {
+  if (!channel) return false;
+  const id = String(channel.id);
+  const nome = normalizarTexto(channel.name);
+  return id === CANAL_CONTROLE_ENTRADA || nome === "entrada";
 }
 
-function canalEhSaida(channelId) {
-  return String(channelId) === CANAL_CONTROLE_SAIDA;
+function canalEhSaida(channel) {
+  if (!channel) return false;
+  const id = String(channel.id);
+  const nome = normalizarTexto(channel.name);
+  return id === CANAL_CONTROLE_SAIDA || nome === "saida";
 }
 
-function validarCanalPorAcao(acao, channelId) {
-  if (acao === "liberar") return canalEhEntrada(channelId);
-  if (acao === "devolver") return canalEhEntrada(channelId);
-  if (acao === "retirar") return canalEhSaida(channelId);
-  if (acao === "ver") return canalEhEntrada(channelId) || canalEhSaida(channelId);
+function validarCanalPorAcao(acao, channel) {
+  if (acao === "devolver") return canalEhEntrada(channel);
+  if (acao === "retirar") return canalEhSaida(channel);
+  if (acao === "ver") return canalEhEntrada(channel) || canalEhSaida(channel);
   return false;
 }
 
-function mensagemCanalInvalido(acao) {
-  if (acao === "liberar") {
-    return "❌ Use este painel no canal de **entrada** do controle de baú para liberar item aos membros.";
-  }
+function mensagemCanalInvalido(acao, channel) {
+  const atual = channel?.name ? `\n📍 Canal atual: **#${channel.name}**` : "";
 
   if (acao === "devolver") {
-    return "❌ Use este painel no canal de **entrada** do controle de baú para devolver item ao baú liberado.";
+    return `❌ Use este painel no canal de **entrada** do controle de baú para devolver item ao estoque liberado.${atual}`;
   }
 
   if (acao === "retirar") {
-    return "❌ Use este painel no canal de **saída** do controle de baú para registrar retirada dos membros.";
+    return `❌ Use este painel no canal de **saída** do controle de baú para registrar retirada dos membros.${atual}`;
   }
 
-  return "❌ Use este painel no canal correto do controle de baú.";
+  return `❌ Use este painel no canal correto do controle de baú.${atual}`;
 }
 
 function responderRedirecionamentoForum(interaction, acao) {
   let canalId = "";
   let titulo = "";
   let descricao = "";
-
-  if (acao === "liberar") {
-    canalId = CANAL_CONTROLE_ENTRADA;
-    titulo = "✅ Liberar item";
-    descricao = "Use esta ação para colocar no controle de baú os itens que a liderança liberou aos membros.";
-  }
 
   if (acao === "devolver") {
     canalId = CANAL_CONTROLE_ENTRADA;
@@ -124,13 +125,7 @@ function responderRedirecionamentoForum(interaction, acao) {
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
     .setTitle(titulo)
-    .setDescription(
-      [
-        descricao,
-        "",
-        "Clique no botão abaixo para abrir o canal certo."
-      ].join("\n")
-    )
+    .setDescription([descricao, "", "Clique no botão abaixo para abrir o canal certo."].join("\n"))
     .setFooter({ text: "SINNERS BOT • Redirecionamento" })
     .setTimestamp();
 
@@ -156,16 +151,15 @@ function criarPainelControleBau() {
       [
         "Este é o **estoque liberado para os membros**.",
         "",
-        "Aqui a liderança coloca aos poucos os itens que saíram do **baú da gerência** para uso da facção.",
+        "A **liberação** acontece quando a gerência usa **Transferir p/ Controle** no baú da gerência.",
         "",
         "**Fluxo certo:**",
         "1. item sai do **baú da gerência**",
-        "2. item entra no **controle de baú**",
-        "3. membro retira para usar",
-        "4. se sobrar, devolve para o controle",
+        "2. entra no **controle de baú**",
+        "3. membro **retira** para usar",
+        "4. se sobrar, **devolve** para o controle",
         "",
         "**Regras deste painel:**",
-        "• **Liberar item** → canal **entrada**",
         "• **Devolver item** → canal **entrada**",
         "• **Retirar item** → canal **saída**",
         "• **Ver estoque** → funciona nos dois",
@@ -177,11 +171,6 @@ function criarPainelControleBau() {
     .setTimestamp();
 
   const row1 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(CONTROLE_BUTTON_LIBERAR)
-      .setLabel("Liberar item")
-      .setEmoji("✅")
-      .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
       .setCustomId(CONTROLE_BUTTON_RETIRAR)
       .setLabel("Retirar item")
@@ -208,39 +197,6 @@ function criarPainelControleBau() {
   };
 }
 
-async function abrirSelecaoLiberar(interaction) {
-  if (!podeUsarControleBau(interaction.member)) {
-    return interaction.reply({
-      content: "❌ Você não tem permissão para usar este painel.",
-      flags: 64
-    });
-  }
-
-  if (isForumComandoBot(interaction.channel)) {
-    return responderRedirecionamentoForum(interaction, "liberar");
-  }
-
-  if (!validarCanalPorAcao("liberar", interaction.channelId)) {
-    return interaction.reply({
-      content: mensagemCanalInvalido("liberar"),
-      flags: 64
-    });
-  }
-
-  const select = new StringSelectMenuBuilder()
-    .setCustomId(CONTROLE_SELECT_LIBERAR)
-    .setPlaceholder("Selecione o item para liberar")
-    .addOptions(criarOpcoesItens());
-
-  const row = new ActionRowBuilder().addComponents(select);
-
-  return interaction.reply({
-    content: "Selecione o item que será liberado no controle de baú.",
-    components: [row],
-    flags: 64
-  });
-}
-
 async function abrirSelecaoRetirar(interaction) {
   if (!podeUsarControleBau(interaction.member)) {
     return interaction.reply({
@@ -253,9 +209,21 @@ async function abrirSelecaoRetirar(interaction) {
     return responderRedirecionamentoForum(interaction, "retirar");
   }
 
-  if (!validarCanalPorAcao("retirar", interaction.channelId)) {
+  if (!validarCanalPorAcao("retirar", interaction.channel)) {
     return interaction.reply({
-      content: mensagemCanalInvalido("retirar"),
+      content: mensagemCanalInvalido("retirar", interaction.channel),
+      flags: 64
+    });
+  }
+
+  const itens = await ControleBau.find({
+    item: { $not: /^gerencia_/i },
+    quantidade: { $gt: 0 }
+  }).sort({ item: 1 });
+
+  if (!itens.length) {
+    return interaction.reply({
+      content: "❌ Não há itens disponíveis no controle de baú para retirar.",
       flags: 64
     });
   }
@@ -263,7 +231,7 @@ async function abrirSelecaoRetirar(interaction) {
   const select = new StringSelectMenuBuilder()
     .setCustomId(CONTROLE_SELECT_RETIRAR)
     .setPlaceholder("Selecione o item para retirar")
-    .addOptions(criarOpcoesItens());
+    .addOptions(criarOpcoesItensComEstoque(itens));
 
   const row = new ActionRowBuilder().addComponents(select);
 
@@ -286,17 +254,24 @@ async function abrirSelecaoDevolver(interaction) {
     return responderRedirecionamentoForum(interaction, "devolver");
   }
 
-  if (!validarCanalPorAcao("devolver", interaction.channelId)) {
+  if (!validarCanalPorAcao("devolver", interaction.channel)) {
     return interaction.reply({
-      content: mensagemCanalInvalido("devolver"),
+      content: mensagemCanalInvalido("devolver", interaction.channel),
       flags: 64
     });
   }
 
+  const todos = [...itensGerais, ...itensArmas];
   const select = new StringSelectMenuBuilder()
     .setCustomId(CONTROLE_SELECT_DEVOLVER)
     .setPlaceholder("Selecione o item para devolver")
-    .addOptions(criarOpcoesItens());
+    .addOptions(
+      todos.slice(0, 25).map((item) => ({
+        label: formatarNomeBonito(item),
+        value: normalizarItem(item),
+        description: "Adicionar de volta ao controle"
+      }))
+    );
 
   const row = new ActionRowBuilder().addComponents(select);
 
@@ -318,13 +293,12 @@ async function processarSelecaoControleBau(interaction) {
   const item = interaction.values?.[0];
   let acao = "";
 
-  if (interaction.customId === CONTROLE_SELECT_LIBERAR) acao = "liberar";
   if (interaction.customId === CONTROLE_SELECT_RETIRAR) acao = "retirar";
   if (interaction.customId === CONTROLE_SELECT_DEVOLVER) acao = "devolver";
 
-  if (!validarCanalPorAcao(acao, interaction.channelId)) {
+  if (!validarCanalPorAcao(acao, interaction.channel)) {
     return interaction.reply({
-      content: mensagemCanalInvalido(acao),
+      content: mensagemCanalInvalido(acao, interaction.channel),
       flags: 64
     });
   }
@@ -367,9 +341,9 @@ async function processarModalControleBau(interaction) {
 
   const [, acao, item] = interaction.customId.split(":");
 
-  if (!validarCanalPorAcao(acao, interaction.channelId)) {
+  if (!validarCanalPorAcao(acao, interaction.channel)) {
     return interaction.reply({
-      content: mensagemCanalInvalido(acao),
+      content: mensagemCanalInvalido(acao, interaction.channel),
       flags: 64
     });
   }
@@ -397,13 +371,6 @@ async function processarModalControleBau(interaction) {
     });
   }
 
-  if (acao === "liberar" && registro.quantidade < quantidade) {
-    return interaction.reply({
-      content: `❌ Estoque insuficiente para liberar. Atual: **${formatarQuantidade(registro.quantidade)}**`,
-      flags: 64
-    });
-  }
-
   if (acao === "retirar" && registro.quantidade < quantidade) {
     return interaction.reply({
       content: `❌ Estoque insuficiente para retirar. Atual: **${formatarQuantidade(registro.quantidade)}**`,
@@ -411,7 +378,6 @@ async function processarModalControleBau(interaction) {
     });
   }
 
-  if (acao === "liberar") registro.quantidade -= quantidade;
   if (acao === "retirar") registro.quantidade -= quantidade;
   if (acao === "devolver") registro.quantidade += quantidade;
 
@@ -427,20 +393,17 @@ async function processarModalControleBau(interaction) {
     canalId: interaction.channelId,
     canalNome: interaction.channel?.name || "canal-desconhecido",
     tipo: "controle_bau",
-    acao: acao,
+    acao,
     cargo: "membro",
     registradoEm: new Date()
   });
 
   await enviarLogBonito(interaction.client, {
-    color:
-      acao === "devolver" ? 0x5865f2 :
-      acao === "retirar" ? 0xed4245 :
-      0x57f287,
+    color: acao === "retirar" ? 0xed4245 : 0x5865f2,
     title:
-      acao === "liberar" ? "✅ Item liberado no Controle de Baú" :
-      acao === "retirar" ? "📤 Item retirado do Controle de Baú" :
-      "📥 Item devolvido ao Controle de Baú",
+      acao === "retirar"
+        ? "📤 Item retirado do Controle de Baú"
+        : "📥 Item devolvido ao Controle de Baú",
     description: "Movimentação registrada no estoque liberado aos membros.",
     fields: [
       criarCampo("📦 Item", `**${formatarNomeBonito(itemNormalizado)}**`),
@@ -452,38 +415,14 @@ async function processarModalControleBau(interaction) {
   });
 
   const embed = new EmbedBuilder()
-    .setColor(
-      acao === "devolver" ? 0x5865f2 :
-      acao === "retirar" ? 0xed4245 :
-      0x57f287
-    )
+    .setColor(acao === "retirar" ? 0xed4245 : 0x5865f2)
     .setTitle("✅ Movimentação registrada")
     .addFields(
-      {
-        name: "📦 Item",
-        value: `**${formatarNomeBonito(itemNormalizado)}**`,
-        inline: true
-      },
-      {
-        name: "⚙️ Ação",
-        value: `**${acao}**`,
-        inline: true
-      },
-      {
-        name: "🔢 Quantidade",
-        value: `**${formatarQuantidade(quantidade)}**`,
-        inline: true
-      },
-      {
-        name: "📊 Estoque atual",
-        value: `**${formatarQuantidade(registro.quantidade)}**`,
-        inline: true
-      },
-      {
-        name: "📝 Observação",
-        value: observacao,
-        inline: false
-      }
+      { name: "📦 Item", value: `**${formatarNomeBonito(itemNormalizado)}**`, inline: true },
+      { name: "⚙️ Ação", value: `**${acao}**`, inline: true },
+      { name: "🔢 Quantidade", value: `**${formatarQuantidade(quantidade)}**`, inline: true },
+      { name: "📊 Estoque atual", value: `**${formatarQuantidade(registro.quantidade)}**`, inline: true },
+      { name: "📝 Observação", value: observacao, inline: false }
     )
     .setFooter({ text: "SINNERS BOT • Controle de Baú" })
     .setTimestamp();
@@ -506,7 +445,7 @@ async function verEstoqueControleBau(interaction) {
     return responderRedirecionamentoForum(interaction, "ver");
   }
 
-  if (!validarCanalPorAcao("ver", interaction.channelId)) {
+  if (!validarCanalPorAcao("ver", interaction.channel)) {
     return interaction.reply({
       content: "❌ Use este painel nos canais de entrada ou saída do controle de baú.",
       flags: 64
@@ -542,15 +481,12 @@ async function verEstoqueControleBau(interaction) {
 }
 
 module.exports = {
-  CONTROLE_BUTTON_LIBERAR,
   CONTROLE_BUTTON_RETIRAR,
   CONTROLE_BUTTON_DEVOLVER,
   CONTROLE_BUTTON_VER,
-  CONTROLE_SELECT_LIBERAR,
   CONTROLE_SELECT_RETIRAR,
   CONTROLE_SELECT_DEVOLVER,
   CONTROLE_MODAL_PREFIX,
-  abrirSelecaoLiberar,
   abrirSelecaoRetirar,
   abrirSelecaoDevolver,
   processarModalControleBau,
