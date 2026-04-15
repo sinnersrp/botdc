@@ -1,99 +1,112 @@
 const { cargos } = require("../config/config");
 
-function toArray(value) {
-  if (!value) return [];
-  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+function extrairRoleIds(...valores) {
+  const itens = valores.flatMap((valor) => {
+    if (Array.isArray(valor)) return valor;
+    return [valor];
+  });
 
-  return String(value)
-    .split(",")
-    .map((v) => v.trim())
-    .filter(Boolean);
+  return [...new Set(
+    itens
+      .map((item) => {
+        if (!item) return null;
+
+        if (typeof item === "string") {
+          return item.trim();
+        }
+
+        if (typeof item === "object") {
+          if (typeof item.id === "string") return item.id.trim();
+          if (typeof item.roleId === "string") return item.roleId.trim();
+          if (typeof item.value === "string") return item.value.trim();
+        }
+
+        return null;
+      })
+      .filter((item) => item && /^\d+$/.test(item))
+  )];
 }
 
-function getRoleIds(member) {
-  if (!member?.roles?.cache) return [];
-  return [...member.roles.cache.keys()].map(String);
+function memberTemAlgumCargo(member, roleIds) {
+  if (!member || !member.roles || !member.roles.cache) return false;
+  if (!Array.isArray(roleIds) || !roleIds.length) return false;
+
+  return roleIds.some((roleId) => member.roles.cache.has(roleId));
 }
 
-function hasAnyRole(member, roleIds) {
-  const memberRoles = getRoleIds(member);
-  const allowed = toArray(roleIds);
-
-  if (!memberRoles.length || !allowed.length) return false;
-  return allowed.some((roleId) => memberRoles.includes(String(roleId)));
-}
-
-function getCargosAltos() {
-  return [
+function getCargosLiderancaIds() {
+  return extrairRoleIds(
     cargos.cargo01,
     cargos.cargo02,
     cargos.cargo03,
-    cargos.gerenteGeral
-  ];
-}
-
-function getTodosOsCargos() {
-  return [
-    cargos.cargo01,
-    cargos.cargo02,
-    cargos.cargo03,
+    cargos.cargoGerenteGeral,
     cargos.gerenteGeral,
+    cargos.lideranca
+  );
+}
+
+function getCargosControleBauIds() {
+  return extrairRoleIds(
+    cargos.cargo01,
+    cargos.cargo02,
+    cargos.cargo03,
+    cargos.cargoGerenteGeral,
+    cargos.cargoMembro,
     cargos.membro
-  ];
+  );
+}
+
+function getCargosRegistroIds() {
+  return extrairRoleIds(
+    cargos.cargo01,
+    cargos.cargo02,
+    cargos.cargo03,
+    cargos.cargoGerenteGeral,
+    cargos.cargoMembro,
+    cargos.membro
+  );
 }
 
 function isGerenteOuLider(member) {
-  return hasAnyRole(member, getCargosAltos());
-}
-
-function isMembro(member) {
-  return hasAnyRole(member, getTodosOsCargos());
-}
-
-function podeUsarRegistro(member) {
-  return hasAnyRole(member, getTodosOsCargos());
-}
-
-function podeUsarControleBau(member) {
-  return hasAnyRole(member, getTodosOsCargos());
+  return memberTemAlgumCargo(member, getCargosLiderancaIds());
 }
 
 function podeUsarBauGerencia(member) {
-  return hasAnyRole(member, getCargosAltos());
+  return memberTemAlgumCargo(member, getCargosLiderancaIds());
 }
 
-function getFarmOwnerId(channel) {
-  if (!channel) return null;
-
-  if (channel.topic && String(channel.topic).startsWith("farm:")) {
-    return String(channel.topic).replace("farm:", "").trim();
-  }
-
-  return null;
+function podeUsarControleBau(member) {
+  return memberTemAlgumCargo(member, getCargosControleBauIds());
 }
 
-function podeUsarFarmNoCanal(member, channel) {
-  if (!member || !channel) return false;
+function podeUsarRegistro(member) {
+  return memberTemAlgumCargo(member, getCargosRegistroIds());
+}
 
-  if (hasAnyRole(member, getCargosAltos())) {
+function podeUsarFarm(member, channel = null) {
+  if (!member) return false;
+
+  if (isGerenteOuLider(member)) {
     return true;
   }
 
-  const ownerId = getFarmOwnerId(channel);
-  if (!ownerId) return false;
+  if (!channel) return false;
 
-  return String(member.id) === String(ownerId);
+  const topic = String(channel.topic || "").trim();
+  const esperado = `farm:${member.id}`;
+
+  return topic === esperado;
 }
 
 module.exports = {
-  toArray,
-  getRoleIds,
-  hasAnyRole,
+  extrairRoleIds,
+  memberTemAlgumCargo,
+  getCargosLiderancaIds,
+  getCargosControleBauIds,
+  getCargosRegistroIds,
   isGerenteOuLider,
-  isMembro,
-  podeUsarRegistro,
-  podeUsarControleBau,
   podeUsarBauGerencia,
-  podeUsarFarmNoCanal,
-  getFarmOwnerId
+  podeUsarControleBau,
+  podeUsarRegistro,
+  podeUsarFarm
 };
