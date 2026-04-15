@@ -2,116 +2,202 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  ChannelType,
   ModalBuilder,
-  PermissionFlagsBits,
   TextInputBuilder,
-  TextInputStyle
+  TextInputStyle,
+  EmbedBuilder,
+  PermissionFlagsBits,
+  ChannelType,
+  OverwriteType
 } = require("discord.js");
-
-const {
-  canais,
-  cargosLiberacao,
-  cargoMembroPadrao,
-  cargoAmigos
-} = require("../config/config");
+const { canais, cargos } = require("../config/config");
 
 const REGISTRO_BUTTON_ID = "registro_abrir_modal";
 const REGISTRO_MODAL_ID = "registro_modal";
 
-function normalizarTexto(texto = "") {
-  return texto
+function somenteNumeros(valor) {
+  return String(valor || "").replace(/\D/g, "");
+}
+
+function normalizarTexto(valor = "") {
+  return String(valor || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
     .trim();
 }
 
-function limparNomeCanal(nome = "") {
+function slugNome(nome = "") {
   return normalizarTexto(nome)
+    .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, "")
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 40);
+    .replace(/^-|-$/g, "");
 }
 
-function limparPassaporte(passaporte = "") {
-  return String(passaporte)
-    .replace(/[^0-9a-zA-Z-]/g, "")
-    .slice(0, 20);
+function capitalizarNome(nome = "") {
+  return String(nome)
+    .split(" ")
+    .filter(Boolean)
+    .map((parte) => parte.charAt(0).toUpperCase() + parte.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function getRoleIdsValidos(...valores) {
+  const itens = valores.flatMap((valor) => {
+    if (Array.isArray(valor)) return valor;
+    return [valor];
+  });
+
+  return [...new Set(
+    itens
+      .map((item) => {
+        if (!item) return null;
+        if (typeof item === "string") return item.trim();
+        if (typeof item === "object") {
+          if (typeof item.id === "string") return item.id.trim();
+          if (typeof item.roleId === "string") return item.roleId.trim();
+          if (typeof item.value === "string") return item.value.trim();
+        }
+        return null;
+      })
+      .filter((item) => item && /^\d+$/.test(item))
+  )];
 }
 
 function criarPainelRegistro() {
-  const botao = new ButtonBuilder()
-    .setCustomId(REGISTRO_BUTTON_ID)
-    .setLabel("Fazer registro")
-    .setStyle(ButtonStyle.Primary);
+  const embed = new EmbedBuilder()
+    .setColor(0x8e44ad)
+    .setTitle("📝 Painel de Registro")
+    .setDescription(
+      [
+        "Use este painel para concluir seu registro.",
+        "",
+        "**Como funciona:**",
+        "• clique em **Fazer registro**",
+        "• preencha seu nome e passaporte",
+        "• o bot cria seu canal privado de farm",
+        "• o cargo de membro é aplicado automaticamente"
+      ].join("\n")
+    )
+    .setFooter({ text: "SINNERS BOT • Registro" })
+    .setTimestamp();
 
-  const row = new ActionRowBuilder().addComponents(botao);
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(REGISTRO_BUTTON_ID)
+      .setLabel("Fazer registro")
+      .setEmoji("📝")
+      .setStyle(ButtonStyle.Success)
+  );
 
   return {
-    content: [
-      "📋 **REGISTRO DE NOVO MEMBRO**",
-      "",
-      "Clique no botão abaixo para preencher seu registro.",
-      "Preencha corretamente:",
-      "• Nome",
-      "• Passaporte",
-      "• Número em game"
-    ].join("\n"),
+    embeds: [embed],
     components: [row]
   };
 }
 
-async function buscarCanalFarmExistente(guild, userId) {
-  return guild.channels.cache.find((channel) => {
-    if (channel.parentId !== canais.categoriaFarmPrivado) return false;
-    return channel.topic === `farm:${userId}`;
-  }) || null;
+async function abrirModalRegistro(interaction) {
+  const modal = new ModalBuilder()
+    .setCustomId(REGISTRO_MODAL_ID)
+    .setTitle("Registro do membro");
+
+  const nomeInput = new TextInputBuilder()
+    .setCustomId("nome")
+    .setLabel("Seu nome")
+    .setPlaceholder("Ex: Isabella")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(40);
+
+  const passaporteInput = new TextInputBuilder()
+    .setCustomId("passaporte")
+    .setLabel("Seu passaporte")
+    .setPlaceholder("Ex: 598")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(10);
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(nomeInput),
+    new ActionRowBuilder().addComponents(passaporteInput)
+  );
+
+  return interaction.showModal(modal);
 }
 
-async function restaurarCanalSeExistir(canal, member) {
-  const permissionOverwrites = [...canal.permissionOverwrites.cache.values()]
-    .map((overwrite) => ({
-      id: overwrite.id,
-      allow: overwrite.allow.bitfield.toString(),
-      deny: overwrite.deny.bitfield.toString()
-    }))
-    .filter((overwrite) => overwrite.id !== member.id);
+async function buscarOuCriarCanalFarm(member, nome, passaporte) {
+  const guild = member.guild;
 
-  permissionOverwrites.push({
-    id: member.id,
-    allow: [
-      PermissionFlagsBits.ViewChannel,
-      PermissionFlagsBits.SendMessages,
-      PermissionFlagsBits.ReadMessageHistory,
-      PermissionFlagsBits.AttachFiles,
-      PermissionFlagsBits.EmbedLinks
-    ]
+  const nomeCanal = `${slugNome(nome)}-${passaporte}`;
+  const parentId =
+    canais.categoriaFarmPrivado ||
+    canais.categoriaFarm ||
+    "1480507566302691412";
+
+  const existentes = guild.channels.cache.filter(
+    (channel) =>
+      channel.parentId === String(parentId) &&
+      channel.type === ChannelType.GuildText
+  );
+
+  const canalExistente = existentes.find((channel) => {
+    const topic = String(channel.topic || "").trim();
+    return topic === `farm:${member.id}`;
   });
 
-  let novoNome = canal.name;
-  if (novoNome.startsWith("arquivado-")) {
-    novoNome = novoNome.replace(/^arquivado-/, "");
+  if (canalExistente) {
+    const overwrites = [
+      {
+        id: guild.roles.everyone.id,
+        deny: [PermissionFlagsBits.ViewChannel]
+      },
+      {
+        id: member.id,
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.ReadMessageHistory,
+          PermissionFlagsBits.AttachFiles
+        ]
+      }
+    ];
+
+    const liderancaIds = getRoleIdsValidos(
+      cargos.cargo01,
+      cargos.cargo02,
+      cargos.cargo03,
+      cargos.cargoGerenteGeral,
+      cargos.gerenteGeral,
+      cargos.lideranca
+    );
+
+    for (const roleId of liderancaIds) {
+      overwrites.push({
+        id: roleId,
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.ReadMessageHistory,
+          PermissionFlagsBits.ManageMessages
+        ]
+      });
+    }
+
+    await canalExistente.edit({
+      name: nomeCanal,
+      topic: `farm:${member.id}`,
+      permissionOverwrites: overwrites
+    });
+
+    return canalExistente;
   }
-
-  await canal.edit({
-    name: novoNome.slice(0, 95),
-    permissionOverwrites
-  });
-}
-
-async function criarCanalFarm(guild, member, dados) {
-  const nomeBase = limparNomeCanal(dados.nome || member.user.username || "membro");
-  const passaporteBase = limparPassaporte(dados.passaporte || "sem-passaporte");
-
-  const nomeCanal = `💸┃${nomeBase}┃${passaporteBase}`.slice(0, 95);
 
   const permissionOverwrites = [
     {
       id: guild.roles.everyone.id,
-      deny: [PermissionFlagsBits.ViewChannel]
+      deny: [PermissionFlagsBits.ViewChannel],
+      type: OverwriteType.Role
     },
     {
       id: member.id,
@@ -119,27 +205,38 @@ async function criarCanalFarm(guild, member, dados) {
         PermissionFlagsBits.ViewChannel,
         PermissionFlagsBits.SendMessages,
         PermissionFlagsBits.ReadMessageHistory,
-        PermissionFlagsBits.AttachFiles,
-        PermissionFlagsBits.EmbedLinks
-      ]
+        PermissionFlagsBits.AttachFiles
+      ],
+      type: OverwriteType.Member
     }
   ];
 
-  for (const cargoId of cargosLiberacao) {
+  const liderancaIds = getRoleIdsValidos(
+    cargos.cargo01,
+    cargos.cargo02,
+    cargos.cargo03,
+    cargos.cargoGerenteGeral,
+    cargos.gerenteGeral,
+    cargos.lideranca
+  );
+
+  for (const roleId of liderancaIds) {
     permissionOverwrites.push({
-      id: cargoId,
+      id: roleId,
       allow: [
         PermissionFlagsBits.ViewChannel,
         PermissionFlagsBits.SendMessages,
-        PermissionFlagsBits.ReadMessageHistory
-      ]
+        PermissionFlagsBits.ReadMessageHistory,
+        PermissionFlagsBits.ManageMessages
+      ],
+      type: OverwriteType.Role
     });
   }
 
   const canal = await guild.channels.create({
     name: nomeCanal,
     type: ChannelType.GuildText,
-    parent: canais.categoriaFarmPrivado,
+    parent: parentId,
     topic: `farm:${member.id}`,
     permissionOverwrites
   });
@@ -147,119 +244,106 @@ async function criarCanalFarm(guild, member, dados) {
   return canal;
 }
 
-function criarModalRegistro() {
-  const modal = new ModalBuilder()
-    .setCustomId(REGISTRO_MODAL_ID)
-    .setTitle("Registro de novo membro");
-
-  const nomeInput = new TextInputBuilder()
-    .setCustomId("nome")
-    .setLabel("Nome")
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true)
-    .setMaxLength(40);
-
-  const passaporteInput = new TextInputBuilder()
-    .setCustomId("passaporte")
-    .setLabel("Passaporte")
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true)
-    .setMaxLength(20);
-
-  const numeroGameInput = new TextInputBuilder()
-    .setCustomId("numero_game")
-    .setLabel("Número em game")
-    .setStyle(TextInputStyle.Short)
-    .setRequired(false)
-    .setMaxLength(30);
-
-  modal.addComponents(
-    new ActionRowBuilder().addComponents(nomeInput),
-    new ActionRowBuilder().addComponents(passaporteInput),
-    new ActionRowBuilder().addComponents(numeroGameInput)
+async function adicionarCargosRegistro(member) {
+  const roleIds = getRoleIdsValidos(
+    cargos.cargoMembro,
+    cargos.membro
   );
 
-  return modal;
+  if (!roleIds.length) return [];
+
+  const cargosExistentes = roleIds.filter((roleId) => member.guild.roles.cache.has(roleId));
+
+  if (!cargosExistentes.length) return [];
+
+  const cargosParaAdicionar = cargosExistentes.filter(
+    (roleId) => !member.roles.cache.has(roleId)
+  );
+
+  if (!cargosParaAdicionar.length) return [];
+
+  await member.roles.add(cargosParaAdicionar);
+
+  return cargosParaAdicionar;
 }
 
-async function abrirModalRegistro(interaction) {
-  const modal = criarModalRegistro();
-  await interaction.showModal(modal);
-}
+async function enviarBoasVindasNoCanal(canal, member, nome, passaporte) {
+  const embed = new EmbedBuilder()
+    .setColor(0x57f287)
+    .setTitle("✅ Registro concluído")
+    .setDescription(
+      [
+        `Bem-vindo, ${member}!`,
+        "",
+        `**Nome:** ${nome}`,
+        `**Passaporte:** ${passaporte}`,
+        "",
+        "Este agora é o seu canal de farm/dinheiro sujo."
+      ].join("\n")
+    )
+    .setFooter({ text: "SINNERS BOT • Registro" })
+    .setTimestamp();
 
-async function enviarConfirmacaoNoCanalPrivado(canalFarm, member, dados, cargoAdicionado) {
-  const linhas = [
-    `✅ Registro concluído para ${member}.`,
-    "",
-    cargoAdicionado
-      ? "✅ Cargo de membro adicionado."
-      : "ℹ️ O usuário já possuía o cargo de membro.",
-    "",
-    `**Nome:** ${dados.nome}`,
-    `**Passaporte:** ${dados.passaporte}`
-  ];
-
-  if (dados.numeroGame) {
-    linhas.push(`**Número em game:** ${dados.numeroGame}`);
-  }
-
-  linhas.push("");
-  linhas.push("Use este canal para sua organização de farm.");
-
-  await canalFarm.send(linhas.join("\n"));
+  await canal.send({
+    content: `${member}`,
+    embeds: [embed]
+  });
 }
 
 async function processarModalRegistro(interaction) {
-  const nome = interaction.fields.getTextInputValue("nome").trim();
-  const passaporte = interaction.fields.getTextInputValue("passaporte").trim();
-  const numeroGame = interaction.fields.getTextInputValue("numero_game").trim();
+  const nomeDigitado = interaction.fields.getTextInputValue("nome");
+  const passaporteDigitado = interaction.fields.getTextInputValue("passaporte");
 
-  const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+  const nome = capitalizarNome(normalizarTexto(nomeDigitado));
+  const passaporte = somenteNumeros(passaporteDigitado);
 
-  if (!member) {
+  if (!nome || nome.length < 2) {
     return interaction.reply({
-      content: "❌ Não foi possível localizar seu membro no servidor.",
+      content: "❌ Informe um nome válido.",
       flags: 64
     });
   }
 
-  const dados = {
-    nome,
-    passaporte,
-    numeroGame
-  };
-
-  let cargoAdicionado = false;
-
-  if (!member.roles.cache.has(cargoMembroPadrao)) {
-    await member.roles.add(cargoMembroPadrao, "Registro automático de novo membro");
-    cargoAdicionado = true;
+  if (!passaporte || passaporte.length < 1) {
+    return interaction.reply({
+      content: "❌ Informe um passaporte válido.",
+      flags: 64
+    });
   }
 
-  if (member.roles.cache.has(cargoAmigos)) {
-    await member.roles.remove(cargoAmigos).catch(() => null);
-  }
+  await interaction.deferReply({ flags: 64 });
 
-  let canalFarm = await buscarCanalFarmExistente(interaction.guild, member.id);
+  const member = await interaction.guild.members.fetch(interaction.user.id);
 
-  if (!canalFarm) {
-    canalFarm = await criarCanalFarm(interaction.guild, member, dados);
-  } else {
-    await restaurarCanalSeExistir(canalFarm, member);
-  }
+  const canal = await buscarOuCriarCanalFarm(member, nome, passaporte);
+  const cargosAdicionados = await adicionarCargosRegistro(member);
 
-  await enviarConfirmacaoNoCanalPrivado(canalFarm, member, dados, cargoAdicionado);
+  await enviarBoasVindasNoCanal(canal, member, nome, passaporte);
 
-  return interaction.reply({
-    content: `✅ Registro concluído. Seu canal privado é ${canalFarm}.`,
-    flags: 64
+  const embed = new EmbedBuilder()
+    .setColor(0x57f287)
+    .setTitle("✅ Registro realizado com sucesso")
+    .setDescription(
+      [
+        `👤 Membro: ${member}`,
+        `📝 Nome: **${nome}**`,
+        `🪪 Passaporte: **${passaporte}**`,
+        `💬 Canal criado/atualizado: ${canal}`,
+        `🏷️ Cargos adicionados: **${cargosAdicionados.length ? cargosAdicionados.length : 0}**`
+      ].join("\n")
+    )
+    .setFooter({ text: "SINNERS BOT • Registro" })
+    .setTimestamp();
+
+  return interaction.editReply({
+    embeds: [embed]
   });
 }
 
 module.exports = {
   REGISTRO_BUTTON_ID,
   REGISTRO_MODAL_ID,
-  abrirModalRegistro,
   criarPainelRegistro,
+  abrirModalRegistro,
   processarModalRegistro
 };
