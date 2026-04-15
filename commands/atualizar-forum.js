@@ -1,102 +1,121 @@
-const { SlashCommandBuilder } = require("discord.js");
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const { isGerenteOuLider } = require("../utils/permissoes");
-const { canais } = require("../config/config");
+const { canais, canaisFarmMembros } = require("../config/config");
 
 const { criarPainelRegistro } = require("../utils/registroMembro");
 const { criarPainelBau } = require("../utils/painelBau");
 const { criarPainelControleBau } = require("../utils/painelControleBau");
 const { criarPainelAvisos } = require("../utils/painelAvisos");
-
-function criarPainelFarm() {
-  return {
-    embeds: [
-      {
-        color: 0x8e44ad,
-        title: "💸 Painel de Dinheiro Sujo",
-        description: [
-          "Use este painel para registrar seu dinheiro sujo semanal.",
-          "",
-          "**Como funciona:**",
-          "• clique em **Registrar dinheiro sujo**",
-          "• informe o valor",
-          "• depois envie a foto do comprovante no canal",
-          "",
-          "O bot vai registrar automaticamente."
-        ].join("\n"),
-        footer: {
-          text: "SINNERS BOT • Dinheiro sujo"
-        },
-        timestamp: new Date().toISOString()
-      }
-    ],
-    components: [
-      {
-        type: 1,
-        components: [
-          {
-            type: 2,
-            style: 3,
-            custom_id: "farm_registrar",
-            label: "Registrar dinheiro sujo",
-            emoji: {
-              name: "💸"
-            }
-          }
-        ]
-      }
-    ]
-  };
-}
+const { criarPainelFarm } = require("../utils/painelFarm");
 
 function criarPainelGerencia() {
-  return {
-    embeds: [
-      {
-        color: 0x8e44ad,
-        title: "🛠️ Painel da Gerência",
-        description: [
-          "Comandos úteis da gerência:",
-          "",
-          "• `/ver-caixa`",
-          "• `/lavar-dinheiro`",
-          "• `/historico-caixa`",
-          "• `/ajuste-gerencia dinheiro-sujo`",
-          "• `/ajuste-gerencia estoque`",
-          "• `/remover-registro-farm`"
-        ].join("\n"),
-        footer: {
-          text: "SINNERS BOT • Gerência"
-        },
-        timestamp: new Date().toISOString()
-      }
-    ]
-  };
+  const embed = new EmbedBuilder()
+    .setColor(0x8e44ad)
+    .setTitle("🛠️ Painel da Gerência")
+    .setDescription(
+      [
+        "Comandos úteis da gerência:",
+        "",
+        "• `/ver-caixa`",
+        "• `/lavar-dinheiro`",
+        "• `/historico-caixa`",
+        "• `/ajuste-gerencia dinheiro-sujo`",
+        "• `/ajuste-gerencia estoque`",
+        "• `/remover-registro-farm`",
+        "• `/atualizar-forum`"
+      ].join("\n")
+    )
+    .setFooter({ text: "SINNERS BOT • Gerência" })
+    .setTimestamp();
+
+  return { embeds: [embed] };
 }
 
-async function enviarSeExistir(guild, channelId, payload) {
-  if (!channelId) return { ok: false, motivo: "ID não informado" };
+function getTitulosPainel() {
+  return [
+    "📝 Painel de Registro",
+    "💸 Painel de Dinheiro Sujo",
+    "📦 Painel do Baú da Gerência",
+    "📦 Painel do Controle de Baú",
+    "📢 Painel de Avisos",
+    "🛠️ Painel da Gerência"
+  ];
+}
 
-  const canal =
-    guild.channels.cache.get(String(channelId)) ||
-    await guild.channels.fetch(String(channelId)).catch(() => null);
+function mensagemEhPainelDoBot(message) {
+  if (!message || !message.author || !message.author.bot) return false;
+  if (!message.embeds || !message.embeds.length) return false;
 
-  if (!canal) {
-    return { ok: false, motivo: `Canal ${channelId} não encontrado` };
+  const titulos = getTitulosPainel();
+  const titulo = String(message.embeds[0]?.title || "").trim();
+
+  return titulos.includes(titulo);
+}
+
+async function limparPaineisAntigosDoCanal(channel) {
+  if (!channel || !channel.isTextBased?.()) {
+    return { apagadas: 0 };
   }
 
-  await canal.send(payload);
-  return { ok: true, canal: canal.name };
+  let apagadas = 0;
+  let ultimaMensagemId = undefined;
+  let continuar = true;
+
+  while (continuar) {
+    const mensagens = await channel.messages.fetch({
+      limit: 100,
+      before: ultimaMensagemId
+    });
+
+    if (!mensagens.size) break;
+
+    const paraApagar = mensagens.filter((msg) => mensagemEhPainelDoBot(msg));
+    for (const [, msg] of paraApagar) {
+      try {
+        await msg.delete();
+        apagadas++;
+      } catch (_) {}
+    }
+
+    ultimaMensagemId = mensagens.last()?.id;
+    continuar = mensagens.size === 100;
+  }
+
+  return { apagadas };
+}
+
+async function buscarCanal(guild, channelId) {
+  if (!channelId) return null;
+  return (
+    guild.channels.cache.get(String(channelId)) ||
+    await guild.channels.fetch(String(channelId)).catch(() => null)
+  );
+}
+
+async function limparEEnviarPainel(channel, payload) {
+  if (!channel) {
+    return { ok: false, motivo: "Canal não encontrado", apagadas: 0 };
+  }
+
+  const { apagadas } = await limparPaineisAntigosDoCanal(channel);
+  await channel.send(payload);
+
+  return {
+    ok: true,
+    canal: channel.name,
+    apagadas
+  };
 }
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("atualizar-forum")
-    .setDescription("Envia todos os painéis nos canais corretos"),
+    .setDescription("Limpa painéis antigos do bot e reposta todos os painéis atualizados"),
 
   async execute(interaction) {
     if (!isGerenteOuLider(interaction.member)) {
       return interaction.reply({
-        content: "❌ Apenas a liderança pode usar este comando.",
+        content: "❌ Apenas 01, 02, 03 e gerente geral podem usar este comando.",
         flags: 64
       });
     }
@@ -106,60 +125,81 @@ module.exports = {
     const guild = interaction.guild;
     const resultados = [];
 
-    const tarefas = [
+    const canaisFixos = [
       {
         nome: "Painel de Registro",
-        canalId: canais.registro,
+        channelId: canais.registro,
         payload: criarPainelRegistro()
       },
       {
         nome: "Painel de Dinheiro Sujo",
-        canalId: canais.metaSemanal,
+        channelId: canais.metaSemanal,
         payload: criarPainelFarm()
       },
       {
         nome: "Painel do Baú da Gerência • Entrada",
-        canalId: canais.bauGerenciaEntrada,
+        channelId: canais.bauGerenciaEntrada,
         payload: criarPainelBau()
       },
       {
         nome: "Painel do Baú da Gerência • Saída",
-        canalId: canais.bauGerenciaSaida,
+        channelId: canais.bauGerenciaSaida,
         payload: criarPainelBau()
       },
       {
         nome: "Painel do Controle de Baú • Entrada",
-        canalId: canais.controleBauEntrada,
+        channelId: canais.controleBauEntrada,
         payload: criarPainelControleBau()
       },
       {
         nome: "Painel do Controle de Baú • Saída",
-        canalId: canais.controleBauSaida,
+        channelId: canais.controleBauSaida,
         payload: criarPainelControleBau()
       },
       {
         nome: "Painel de Avisos",
-        canalId: canais.canalAvisos || canais.categoriaAvisos,
+        channelId: canais.canalAvisos || canais.categoriaAvisos,
         payload: criarPainelAvisos()
       },
       {
         nome: "Painel da Gerência",
-        canalId: canais.chatGerencia || canais.logs || canais.bauGerenciaEntrada,
+        channelId: canais.chatGerencia || canais.logs,
         payload: criarPainelGerencia()
       }
     ];
 
-    for (const tarefa of tarefas) {
+    for (const item of canaisFixos) {
       try {
-        const resultado = await enviarSeExistir(guild, tarefa.canalId, tarefa.payload);
+        const canal = await buscarCanal(guild, item.channelId);
+        const resultado = await limparEEnviarPainel(canal, item.payload);
 
         if (resultado.ok) {
-          resultados.push(`✅ ${tarefa.nome} enviado em **#${resultado.canal}**`);
+          resultados.push(`✅ ${item.nome} → **#${resultado.canal}** (apagadas: ${resultado.apagadas})`);
         } else {
-          resultados.push(`❌ ${tarefa.nome}: ${resultado.motivo}`);
+          resultados.push(`❌ ${item.nome} → ${resultado.motivo}`);
         }
       } catch (error) {
-        resultados.push(`❌ ${tarefa.nome}: ${error.message}`);
+        resultados.push(`❌ ${item.nome} → ${error.message}`);
+      }
+    }
+
+    for (const membro of canaisFarmMembros) {
+      try {
+        const canal = await buscarCanal(guild, membro.channelId);
+
+        if (!canal) {
+          resultados.push(`❌ Painel Farm do membro **${membro.nome} | ${membro.passaporte}** → canal não encontrado`);
+          continue;
+        }
+
+        const { apagadas } = await limparPaineisAntigosDoCanal(canal);
+        await canal.send(criarPainelFarm());
+
+        resultados.push(
+          `✅ Painel Farm do membro **${membro.nome} | ${membro.passaporte}** → **#${canal.name}** (apagadas: ${apagadas})`
+        );
+      } catch (error) {
+        resultados.push(`❌ Painel Farm do membro **${membro.nome} | ${membro.passaporte}** → ${error.message}`);
       }
     }
 

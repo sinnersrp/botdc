@@ -15,11 +15,8 @@ const { sincronizarPlanilhaFarm } = require("./googleSheetsFarm");
 const { podeUsarFarm } = require("./permissoes");
 
 const FARM_BUTTON_REGISTRAR = "farm_registrar";
-
-const FARM_BUTTON_VOLTAR = "farm_voltar";
 const FARM_BUTTON_CANCELAR = "farm_cancelar";
 const FARM_BUTTON_CONFIRMAR = "farm_confirmar";
-
 const FARM_MODAL_REGISTRAR = "farm_modal_registrar";
 
 const sessoesFarm = new Map();
@@ -44,12 +41,7 @@ function criarPainelFarm() {
         "**Fluxo:**",
         "1. informar valor",
         "2. confirmar",
-        "3. enviar comprovante no canal",
-        "",
-        "Agora com:",
-        "• voltar",
-        "• cancelar",
-        "• confirmar"
+        "3. enviar comprovante no canal"
       ].join("\n")
     )
     .setFooter({ text: "SINNERS BOT • Dinheiro Sujo" })
@@ -279,7 +271,6 @@ async function processarMensagemComprovanteFarm(message) {
 
 module.exports = {
   FARM_BUTTON_REGISTRAR,
-  FARM_BUTTON_VOLTAR,
   FARM_BUTTON_CANCELAR,
   FARM_BUTTON_CONFIRMAR,
   FARM_MODAL_REGISTRAR,

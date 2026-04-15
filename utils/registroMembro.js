@@ -10,7 +10,9 @@ const {
   ChannelType,
   OverwriteType
 } = require("discord.js");
+
 const { canais, cargos } = require("../config/config");
+const { criarPainelFarm } = require("./painelFarm");
 
 const REGISTRO_BUTTON_ID = "registro_abrir_modal";
 const REGISTRO_MODAL_ID = "registro_modal";
@@ -76,8 +78,9 @@ function criarPainelRegistro() {
         "**Como funciona:**",
         "• clique em **Fazer registro**",
         "• preencha seu nome e passaporte",
-        "• o bot cria seu canal privado de farm",
-        "• o cargo de membro é aplicado automaticamente"
+        "• o bot cria sua aba de farm",
+        "• o cargo de membro é aplicado automaticamente",
+        "• o painel de farm já aparece na sua aba"
       ].join("\n")
     )
     .setFooter({ text: "SINNERS BOT • Registro" })
@@ -105,7 +108,7 @@ async function abrirModalRegistro(interaction) {
   const nomeInput = new TextInputBuilder()
     .setCustomId("nome")
     .setLabel("Seu nome")
-    .setPlaceholder("Ex: Isabella")
+    .setPlaceholder("Ex: Sam")
     .setStyle(TextInputStyle.Short)
     .setRequired(true)
     .setMaxLength(40);
@@ -113,7 +116,7 @@ async function abrirModalRegistro(interaction) {
   const passaporteInput = new TextInputBuilder()
     .setCustomId("passaporte")
     .setLabel("Seu passaporte")
-    .setPlaceholder("Ex: 598")
+    .setPlaceholder("Ex: 187")
     .setStyle(TextInputStyle.Short)
     .setRequired(true)
     .setMaxLength(10);
@@ -126,14 +129,15 @@ async function abrirModalRegistro(interaction) {
   return interaction.showModal(modal);
 }
 
+function montarNomeCanalFarm(nome, passaporte) {
+  return `💸 | ${normalizarTexto(nome).toLowerCase()} | ${passaporte}`;
+}
+
 async function buscarOuCriarCanalFarm(member, nome, passaporte) {
   const guild = member.guild;
 
-  const nomeCanal = `${slugNome(nome)}-${passaporte}`;
-  const parentId =
-    canais.categoriaFarmPrivado ||
-    canais.categoriaFarm ||
-    "1480507566302691412";
+  const nomeCanal = montarNomeCanalFarm(nome, passaporte);
+  const parentId = canais.categoriaFarm || "1480507566302691412";
 
   const existentes = guild.channels.cache.filter(
     (channel) =>
@@ -146,52 +150,12 @@ async function buscarOuCriarCanalFarm(member, nome, passaporte) {
     return topic === `farm:${member.id}`;
   });
 
-  if (canalExistente) {
-    const overwrites = [
-      {
-        id: guild.roles.everyone.id,
-        deny: [PermissionFlagsBits.ViewChannel]
-      },
-      {
-        id: member.id,
-        allow: [
-          PermissionFlagsBits.ViewChannel,
-          PermissionFlagsBits.SendMessages,
-          PermissionFlagsBits.ReadMessageHistory,
-          PermissionFlagsBits.AttachFiles
-        ]
-      }
-    ];
-
-    const liderancaIds = getRoleIdsValidos(
-      cargos.cargo01,
-      cargos.cargo02,
-      cargos.cargo03,
-      cargos.cargoGerenteGeral,
-      cargos.gerenteGeral,
-      cargos.lideranca
-    );
-
-    for (const roleId of liderancaIds) {
-      overwrites.push({
-        id: roleId,
-        allow: [
-          PermissionFlagsBits.ViewChannel,
-          PermissionFlagsBits.SendMessages,
-          PermissionFlagsBits.ReadMessageHistory,
-          PermissionFlagsBits.ManageMessages
-        ]
-      });
-    }
-
-    await canalExistente.edit({
-      name: nomeCanal,
-      topic: `farm:${member.id}`,
-      permissionOverwrites: overwrites
-    });
-
-    return canalExistente;
-  }
+  const liderancaIds = getRoleIdsValidos(
+    cargos.cargo01,
+    cargos.cargo02,
+    cargos.cargo03,
+    cargos.cargoGerenteGeral
+  );
 
   const permissionOverwrites = [
     {
@@ -211,15 +175,6 @@ async function buscarOuCriarCanalFarm(member, nome, passaporte) {
     }
   ];
 
-  const liderancaIds = getRoleIdsValidos(
-    cargos.cargo01,
-    cargos.cargo02,
-    cargos.cargo03,
-    cargos.cargoGerenteGeral,
-    cargos.gerenteGeral,
-    cargos.lideranca
-  );
-
   for (const roleId of liderancaIds) {
     permissionOverwrites.push({
       id: roleId,
@@ -231,6 +186,16 @@ async function buscarOuCriarCanalFarm(member, nome, passaporte) {
       ],
       type: OverwriteType.Role
     });
+  }
+
+  if (canalExistente) {
+    await canalExistente.edit({
+      name: nomeCanal,
+      topic: `farm:${member.id}`,
+      permissionOverwrites
+    });
+
+    return canalExistente;
   }
 
   const canal = await guild.channels.create({
@@ -245,15 +210,11 @@ async function buscarOuCriarCanalFarm(member, nome, passaporte) {
 }
 
 async function adicionarCargosRegistro(member) {
-  const roleIds = getRoleIdsValidos(
-    cargos.cargoMembro,
-    cargos.membro
-  );
+  const roleIds = getRoleIdsValidos(cargos.cargoMembro);
 
   if (!roleIds.length) return [];
 
   const cargosExistentes = roleIds.filter((roleId) => member.guild.roles.cache.has(roleId));
-
   if (!cargosExistentes.length) return [];
 
   const cargosParaAdicionar = cargosExistentes.filter(
@@ -278,7 +239,7 @@ async function enviarBoasVindasNoCanal(canal, member, nome, passaporte) {
         `**Nome:** ${nome}`,
         `**Passaporte:** ${passaporte}`,
         "",
-        "Este agora é o seu canal de farm/dinheiro sujo."
+        "Este agora é o seu canal de farm / dinheiro sujo."
       ].join("\n")
     )
     .setFooter({ text: "SINNERS BOT • Registro" })
@@ -288,6 +249,30 @@ async function enviarBoasVindasNoCanal(canal, member, nome, passaporte) {
     content: `${member}`,
     embeds: [embed]
   });
+}
+
+async function limparPainelFarmAntigoDoCanal(canal) {
+  if (!canal || !canal.isTextBased?.()) return;
+
+  const mensagens = await canal.messages.fetch({ limit: 50 }).catch(() => null);
+  if (!mensagens) return;
+
+  const antigas = mensagens.filter((msg) => {
+    if (!msg.author?.bot) return false;
+    if (!msg.embeds?.length) return false;
+    return String(msg.embeds[0]?.title || "").trim() === "💸 Painel de Dinheiro Sujo";
+  });
+
+  for (const [, msg] of antigas) {
+    try {
+      await msg.delete();
+    } catch (_) {}
+  }
+}
+
+async function enviarPainelFarmNoCanal(canal) {
+  await limparPainelFarmAntigoDoCanal(canal);
+  await canal.send(criarPainelFarm());
 }
 
 async function processarModalRegistro(interaction) {
@@ -319,6 +304,7 @@ async function processarModalRegistro(interaction) {
   const cargosAdicionados = await adicionarCargosRegistro(member);
 
   await enviarBoasVindasNoCanal(canal, member, nome, passaporte);
+  await enviarPainelFarmNoCanal(canal);
 
   const embed = new EmbedBuilder()
     .setColor(0x57f287)
@@ -328,7 +314,7 @@ async function processarModalRegistro(interaction) {
         `👤 Membro: ${member}`,
         `📝 Nome: **${nome}**`,
         `🪪 Passaporte: **${passaporte}**`,
-        `💬 Canal criado/atualizado: ${canal}`,
+        `💬 Aba criada/atualizada: ${canal}`,
         `🏷️ Cargos adicionados: **${cargosAdicionados.length ? cargosAdicionados.length : 0}**`
       ].join("\n")
     )
@@ -345,5 +331,7 @@ module.exports = {
   REGISTRO_MODAL_ID,
   criarPainelRegistro,
   abrirModalRegistro,
-  processarModalRegistro
+  processarModalRegistro,
+  enviarPainelFarmNoCanal,
+  montarNomeCanalFarm
 };
