@@ -1,10 +1,7 @@
 const { SlashCommandBuilder } = require("discord.js");
-const { criarPainelAvisos } = require("../utils/painelAvisos");
 const { isGerenteOuLider } = require("../utils/permissoes");
-const {
-  canUsePainelHere,
-  getAllowedText
-} = require("../utils/canaisPermitidosPainel");
+const { canUsePainelHere, getAllowedText } = require("../utils/canaisPermitidosPainel");
+const { criarPainelAvisos } = require("../utils/painelAvisos");
 
 module.exports = {
   data: new SlashCommandBuilder()

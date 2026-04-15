@@ -1,7 +1,19 @@
 const { canais } = require("../config/config");
 
-function isForum(channel) {
-  const forumIds = [
+function toStr(value) {
+  return value ? String(value) : "";
+}
+
+function normalizarTexto(valor = "") {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function getForumIds() {
+  return [
     canais.forumComandoBot,
     canais.comandoBot,
     canais.comandoBotForum,
@@ -9,49 +21,69 @@ function isForum(channel) {
   ]
     .filter(Boolean)
     .map(String);
+}
 
-  return forumIds.includes(String(channel?.id));
+function isForumComandoBot(channel) {
+  if (!channel) return false;
+
+  const channelId = toStr(channel.id);
+  const parentId = toStr(channel.parentId);
+  const forumIds = getForumIds();
+
+  return forumIds.includes(channelId) || forumIds.includes(parentId);
+}
+
+function channelNameIs(channel, ...nomes) {
+  const nomeCanal = normalizarTexto(channel?.name || "");
+  return nomes.map(normalizarTexto).includes(nomeCanal);
 }
 
 function canUsePainelHere(tipo, channel) {
   if (!channel) return false;
 
-  if (isForum(channel)) return true;
+  if (isForumComandoBot(channel)) return true;
 
-  const channelId = String(channel.id);
-  const parentId = channel.parentId ? String(channel.parentId) : "";
+  const channelId = toStr(channel.id);
 
   switch (tipo) {
     case "registro":
-      return channelId === "1480507565770018849";
+      return (
+        channelId === toStr(canais.registro) ||
+        channelNameIs(channel, "registro")
+      );
 
     case "avisos":
-      return channelId === "1480507565770018851";
+      return (
+        channelId === toStr(canais.canalAvisos || canais.categoriaAvisos) ||
+        channelNameIs(channel, "avisos", "canal-de-avisos", "aviso", "avisos-gerais")
+      );
 
     case "farm":
       return (
-        channelId === "1480507566302691413" ||
-        parentId === "1480507566302691412"
+        channelId === toStr(canais.metaSemanal) ||
+        toStr(channel.parentId) === toStr(canais.categoriaFarm) ||
+        channelNameIs(channel, "meta-semanal")
       );
 
     case "bau":
       return (
-        channelId === "1486811209565995169" ||
-        channelId === "1486811278281408512"
+        channelId === toStr(canais.bauGerenciaEntrada) ||
+        channelId === toStr(canais.bauGerenciaSaida) ||
+        channelNameIs(channel, "entrada-bau", "saida-bau")
       );
 
     case "controle_bau":
       return (
-        channelId === "1480507568265760812" ||
-        channelId === "1480507568265760814"
+        channelId === toStr(canais.controleBauEntrada) ||
+        channelId === toStr(canais.controleBauSaida) ||
+        channelNameIs(channel, "entrada", "saida")
       );
 
     case "gerencia":
       return (
-        channelId === "1486811209565995169" || // troque se quiser outro canal
-        channelId === "1486811278281408512" || // troque se quiser outro canal
-        channel.name === "chat-da-gerencia" ||
-        channel.name === "logs"
+        channelId === toStr(canais.chatGerencia) ||
+        channelId === toStr(canais.logs) ||
+        channelNameIs(channel, "chat-da-gerencia", "logs", "contatos")
       );
 
     default:
@@ -79,6 +111,7 @@ function getAllowedText(tipo) {
 }
 
 module.exports = {
+  isForumComandoBot,
   canUsePainelHere,
   getAllowedText
 };
