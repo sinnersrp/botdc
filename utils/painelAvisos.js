@@ -2,63 +2,73 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  EmbedBuilder,
-  ModalBuilder,
   StringSelectMenuBuilder,
+  ModalBuilder,
   TextInputBuilder,
-  TextInputStyle
+  TextInputStyle,
+  EmbedBuilder
 } = require("discord.js");
+const { canais } = require("../config/config");
 
-const AvisoAgendado = require("../models/AvisoAgendado");
-const { canais, cargoMembroPadrao } = require("../config/config");
-const { isGerenteOuLider } = require("./permissoes");
-const { enviarAvisoPrivadoParaAlvos } = require("./avisoEntrega");
-
-const AVISO_BUTTON_AGORA = "aviso_enviar_agora";
+const AVISO_BUTTON_AGORA = "aviso_agora";
 const AVISO_BUTTON_AGENDAR = "aviso_agendar";
 
-const AVISO_SELECT_MENCAO_PREFIX = "aviso_select_mencao";
-const AVISO_SELECT_DIA_PREFIX = "aviso_select_dia";
-const AVISO_SELECT_HORA_PREFIX = "aviso_select_hora";
+const AVISO_SELECT_MENCAO_PREFIX = "aviso_mencao";
+const AVISO_SELECT_DIA_PREFIX = "aviso_dia";
+const AVISO_SELECT_HORA_PREFIX = "aviso_hora";
 
 const AVISO_MODAL_AGORA_PREFIX = "aviso_modal_agora";
 const AVISO_MODAL_AGENDAR_PREFIX = "aviso_modal_agendar";
 
-function isGerencia(interaction) {
-  return isGerenteOuLider(interaction.member);
+const agendamentosTemp = new Map();
+
+function normalizarTexto(valor = "") {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
-function getMencaoLabel(tipo) {
+function getCanalAvisosId() {
+  return (
+    canais.canalAvisos ||
+    canais.avisos ||
+    canais.categoriaAvisos ||
+    "1480507565770018851"
+  );
+}
+
+async function buscarCanalAvisos(guild) {
+  const canalId = String(getCanalAvisosId());
+
+  let canal = guild.channels.cache.get(canalId);
+  if (canal) return canal;
+
+  try {
+    canal = await guild.channels.fetch(canalId);
+    if (canal) return canal;
+  } catch (_) {}
+
+  const nomesAceitos = [
+    "avisos",
+    "canal-de-avisos",
+    "aviso",
+    "avisos-gerais"
+  ].map(normalizarTexto);
+
+  canal =
+    guild.channels.cache.find((ch) => nomesAceitos.includes(normalizarTexto(ch.name))) ||
+    null;
+
+  return canal;
+}
+
+function getTextoMencao(tipo) {
   if (tipo === "everyone") return "@everyone";
-  if (tipo === "membro") return "@membro";
-  return "Sem menção";
-}
-
-function getMencaoConteudo(mencaoTipo) {
-  if (mencaoTipo === "everyone") return "@everyone";
-  if (mencaoTipo === "membro") return `<@&${cargoMembroPadrao}>`;
+  if (tipo === "here") return "@here";
+  if (tipo === "sem-mencao") return "";
   return "";
-}
-
-function getAllowedMentions(mencaoTipo) {
-  if (mencaoTipo === "everyone") {
-    return { parse: ["everyone"] };
-  }
-
-  if (mencaoTipo === "membro") {
-    return { roles: [cargoMembroPadrao] };
-  }
-
-  return { parse: [] };
-}
-
-function criarEmbedAviso({ mensagem, rodape = "SINNERS FAMILY • Aviso oficial" }) {
-  return new EmbedBuilder()
-    .setColor(0x8e44ad)
-    .setTitle("📢 Aviso da Família")
-    .setDescription(mensagem)
-    .setFooter({ text: rodape })
-    .setTimestamp();
 }
 
 function criarPainelAvisos() {
@@ -67,28 +77,21 @@ function criarPainelAvisos() {
     .setTitle("📢 Painel de Avisos")
     .setDescription(
       [
-        "Use este painel para mandar avisos de forma rápida e organizada.",
+        "Use este painel para enviar avisos no canal oficial de avisos.",
         "",
         "**Opções:**",
-        "• enviar aviso agora",
-        "• agendar aviso",
-        "",
-        "**Fluxo simples:**",
-        "1. escolher menção",
-        "2. escolher dia e hora, se for agendado",
-        "3. escrever só a mensagem",
-        "",
-        "**Entrega do aviso:**",
-        "• canal de avisos",
-        "• privado dos membros"
+        "• **Aviso agora** → envia imediatamente",
+        "• **Agendar aviso** → programa para depois"
       ].join("\n")
-    );
+    )
+    .setFooter({ text: "SINNERS BOT • Avisos" })
+    .setTimestamp();
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(AVISO_BUTTON_AGORA)
-      .setLabel("Enviar agora")
-      .setEmoji("📨")
+      .setLabel("Aviso agora")
+      .setEmoji("📣")
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
       .setCustomId(AVISO_BUTTON_AGENDAR)
@@ -103,326 +106,301 @@ function criarPainelAvisos() {
   };
 }
 
-function criarMenuMencao(acao) {
-  const menu = new StringSelectMenuBuilder()
-    .setCustomId(`${AVISO_SELECT_MENCAO_PREFIX}:${acao}`)
-    .setPlaceholder("Escolha a menção do aviso")
-    .addOptions(
+async function abrirModalAvisoAgora(interaction) {
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(`${AVISO_SELECT_MENCAO_PREFIX}:agora`)
+    .setPlaceholder("Escolha como o aviso vai marcar as pessoas")
+    .addOptions([
+      {
+        label: "Sem menção",
+        value: "sem-mencao",
+        description: "Envia o aviso sem marcar ninguém"
+      },
       {
         label: "@everyone",
         value: "everyone",
         description: "Marca todo mundo"
       },
       {
-        label: "@membro",
-        value: "membro",
-        description: "Marca o cargo de membro"
-      },
-      {
-        label: "Sem menção",
-        value: "nenhum",
-        description: "Envia sem marcar ninguém"
+        label: "@here",
+        value: "here",
+        description: "Marca apenas quem estiver online"
       }
-    );
+    ]);
 
-  return {
+  const row = new ActionRowBuilder().addComponents(select);
+
+  return interaction.reply({
     content: "📢 Escolha como o aviso vai marcar as pessoas:",
-    components: [new ActionRowBuilder().addComponents(menu)],
+    components: [row],
     flags: 64
-  };
-}
-
-function criarMenuDia(mencaoTipo) {
-  const agora = new Date();
-  const opcoes = [];
-
-  for (let i = 0; i < 4; i++) {
-    const data = new Date(agora);
-    data.setDate(agora.getDate() + i);
-
-    const texto = data.toLocaleDateString("pt-BR", {
-      weekday: "long",
-      day: "2-digit",
-      month: "2-digit"
-    });
-
-    opcoes.push({
-      label: i === 0 ? `Hoje - ${texto}` : i === 1 ? `Amanhã - ${texto}` : texto,
-      value: String(i),
-      description: `Agendar para ${texto}`
-    });
-  }
-
-  const menu = new StringSelectMenuBuilder()
-    .setCustomId(`${AVISO_SELECT_DIA_PREFIX}:${mencaoTipo}`)
-    .setPlaceholder("Escolha o dia do aviso")
-    .addOptions(opcoes);
-
-  return {
-    content: `📅 Menção escolhida: **${getMencaoLabel(mencaoTipo)}**\nAgora escolha o dia:`,
-    components: [new ActionRowBuilder().addComponents(menu)],
-    flags: 64
-  };
-}
-
-function criarMenuHora(mencaoTipo, diaOffset) {
-  const menu = new StringSelectMenuBuilder()
-    .setCustomId(`${AVISO_SELECT_HORA_PREFIX}:${mencaoTipo}:${diaOffset}`)
-    .setPlaceholder("Escolha o horário do aviso")
-    .addOptions(
-      { label: "09:00", value: "09-00", description: "Enviar às 09:00" },
-      { label: "12:00", value: "12-00", description: "Enviar às 12:00" },
-      { label: "15:00", value: "15-00", description: "Enviar às 15:00" },
-      { label: "18:00", value: "18-00", description: "Enviar às 18:00" },
-      { label: "20:00", value: "20-00", description: "Enviar às 20:00" },
-      { label: "21:00", value: "21-00", description: "Enviar às 21:00" },
-      { label: "22:00", value: "22-00", description: "Enviar às 22:00" },
-      { label: "23:00", value: "23-00", description: "Enviar às 23:00" }
-    );
-
-  return {
-    content: `⏰ Menção escolhida: **${getMencaoLabel(mencaoTipo)}**\nAgora escolha o horário:`,
-    components: [new ActionRowBuilder().addComponents(menu)],
-    flags: 64
-  };
-}
-
-function criarModalAgora(mencaoTipo) {
-  const modal = new ModalBuilder()
-    .setCustomId(`${AVISO_MODAL_AGORA_PREFIX}:${mencaoTipo}`)
-    .setTitle("Enviar aviso agora");
-
-  const mensagem = new TextInputBuilder()
-    .setCustomId("mensagem")
-    .setLabel("Mensagem do aviso")
-    .setStyle(TextInputStyle.Paragraph)
-    .setRequired(true)
-    .setMaxLength(1800)
-    .setPlaceholder("Escreva o aviso...");
-
-  modal.addComponents(new ActionRowBuilder().addComponents(mensagem));
-  return modal;
-}
-
-function criarModalAgendar(mencaoTipo, diaOffset, horaTextoSeguro) {
-  const modal = new ModalBuilder()
-    .setCustomId(`${AVISO_MODAL_AGENDAR_PREFIX}:${mencaoTipo}:${diaOffset}:${horaTextoSeguro}`)
-    .setTitle("Agendar aviso");
-
-  const mensagem = new TextInputBuilder()
-    .setCustomId("mensagem")
-    .setLabel("Mensagem do aviso")
-    .setStyle(TextInputStyle.Paragraph)
-    .setRequired(true)
-    .setMaxLength(1800)
-    .setPlaceholder("Escreva o aviso...");
-
-  modal.addComponents(new ActionRowBuilder().addComponents(mensagem));
-  return modal;
-}
-
-function montarDataAgendada(diaOffset, horaTextoSeguro) {
-  const horaTexto = String(horaTextoSeguro).replace("-", ":");
-  const [hora, minuto] = horaTexto.split(":").map(Number);
-
-  if (
-    !Number.isInteger(Number(diaOffset)) ||
-    !Number.isInteger(hora) ||
-    !Number.isInteger(minuto)
-  ) {
-    return null;
-  }
-
-  const agora = new Date();
-  const data = new Date(
-    agora.getFullYear(),
-    agora.getMonth(),
-    agora.getDate() + Number(diaOffset),
-    hora,
-    minuto,
-    0,
-    0
-  );
-
-  if (Number.isNaN(data.getTime())) {
-    return null;
-  }
-
-  return data;
-}
-
-function formatarDataBr(data) {
-  return data.toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit"
   });
-}
-
-async function abrirModalAvisoAgora(interaction) {
-  if (!isGerencia(interaction)) {
-    return interaction.reply({
-      content: "❌ Apenas a gerência pode usar este painel.",
-      flags: 64
-    });
-  }
-
-  return interaction.reply(criarMenuMencao("agora"));
 }
 
 async function abrirModalAvisoAgendar(interaction) {
-  if (!isGerencia(interaction)) {
-    return interaction.reply({
-      content: "❌ Apenas a gerência pode usar este painel.",
-      flags: 64
-    });
-  }
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(`${AVISO_SELECT_MENCAO_PREFIX}:agendar`)
+    .setPlaceholder("Escolha como o aviso agendado vai marcar as pessoas")
+    .addOptions([
+      {
+        label: "Sem menção",
+        value: "sem-mencao",
+        description: "Envia o aviso sem marcar ninguém"
+      },
+      {
+        label: "@everyone",
+        value: "everyone",
+        description: "Marca todo mundo"
+      },
+      {
+        label: "@here",
+        value: "here",
+        description: "Marca apenas quem estiver online"
+      }
+    ]);
 
-  return interaction.reply(criarMenuMencao("agendar"));
+  const row = new ActionRowBuilder().addComponents(select);
+
+  return interaction.reply({
+    content: "⏰ Escolha como o aviso agendado vai marcar as pessoas:",
+    components: [row],
+    flags: 64
+  });
 }
 
 async function processarSelectMencao(interaction) {
-  if (!isGerencia(interaction)) {
-    return interaction.reply({
-      content: "❌ Apenas a gerência pode usar este painel.",
-      flags: 64
-    });
+  const [, modo] = interaction.customId.split(":");
+  const mencao = interaction.values[0];
+
+  if (modo === "agora") {
+    const modal = new ModalBuilder()
+      .setCustomId(`${AVISO_MODAL_AGORA_PREFIX}:${mencao}`)
+      .setTitle("Enviar aviso agora");
+
+    const titulo = new TextInputBuilder()
+      .setCustomId("titulo")
+      .setLabel("Título do aviso")
+      .setPlaceholder("Ex: Aviso importante")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setMaxLength(100);
+
+    const mensagem = new TextInputBuilder()
+      .setCustomId("mensagem")
+      .setLabel("Mensagem")
+      .setPlaceholder("Digite o aviso")
+      .setStyle(TextInputStyle.Paragraph)
+      .setRequired(true)
+      .setMaxLength(1800);
+
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(titulo),
+      new ActionRowBuilder().addComponents(mensagem)
+    );
+
+    return interaction.showModal(modal);
   }
 
-  const [, acao] = interaction.customId.split(":");
-  const mencaoTipo = interaction.values[0];
+  const token = `${interaction.user.id}_${Date.now()}`;
+  agendamentosTemp.set(token, {
+    userId: interaction.user.id,
+    guildId: interaction.guildId,
+    mencao
+  });
 
-  if (acao === "agora") {
-    return interaction.showModal(criarModalAgora(mencaoTipo));
-  }
+  const selectDia = new StringSelectMenuBuilder()
+    .setCustomId(`${AVISO_SELECT_DIA_PREFIX}:${token}`)
+    .setPlaceholder("Escolha o dia")
+    .addOptions([
+      { label: "Hoje", value: "hoje" },
+      { label: "Amanhã", value: "amanha" }
+    ]);
 
-  return interaction.update(criarMenuDia(mencaoTipo));
+  const row = new ActionRowBuilder().addComponents(selectDia);
+
+  return interaction.update({
+    content: "📅 Escolha o dia do aviso:",
+    embeds: [],
+    components: [row]
+  });
 }
 
 async function processarSelectDia(interaction) {
-  if (!isGerencia(interaction)) {
+  const [, token] = interaction.customId.split(":");
+  const sessao = agendamentosTemp.get(token);
+
+  if (!sessao) {
     return interaction.reply({
-      content: "❌ Apenas a gerência pode usar este painel.",
+      content: "❌ Esta seleção expirou. Reabra o painel.",
       flags: 64
     });
   }
 
-  const [, mencaoTipo] = interaction.customId.split(":");
-  const diaOffset = interaction.values[0];
+  sessao.dia = interaction.values[0];
+  agendamentosTemp.set(token, sessao);
 
-  return interaction.update(criarMenuHora(mencaoTipo, diaOffset));
+  const options = [];
+  for (let h = 0; h < 24; h++) {
+    const hh = String(h).padStart(2, "0");
+    options.push({
+      label: `${hh}:00`,
+      value: `${hh}:00`
+    });
+  }
+
+  const selectHora = new StringSelectMenuBuilder()
+    .setCustomId(`${AVISO_SELECT_HORA_PREFIX}:${token}`)
+    .setPlaceholder("Escolha a hora")
+    .addOptions(options);
+
+  const row = new ActionRowBuilder().addComponents(selectHora);
+
+  return interaction.update({
+    content: "🕒 Escolha a hora do aviso:",
+    components: [row]
+  });
 }
 
 async function processarSelectHora(interaction) {
-  if (!isGerencia(interaction)) {
+  const [, token] = interaction.customId.split(":");
+  const sessao = agendamentosTemp.get(token);
+
+  if (!sessao) {
     return interaction.reply({
-      content: "❌ Apenas a gerência pode usar este painel.",
+      content: "❌ Esta seleção expirou. Reabra o painel.",
       flags: 64
     });
   }
 
-  const [, mencaoTipo, diaOffset] = interaction.customId.split(":");
-  const horaTextoSeguro = interaction.values[0];
+  sessao.hora = interaction.values[0];
+  agendamentosTemp.set(token, sessao);
 
-  return interaction.showModal(criarModalAgendar(mencaoTipo, diaOffset, horaTextoSeguro));
+  const modal = new ModalBuilder()
+    .setCustomId(`${AVISO_MODAL_AGENDAR_PREFIX}:${token}`)
+    .setTitle("Agendar aviso");
+
+  const titulo = new TextInputBuilder()
+    .setCustomId("titulo")
+    .setLabel("Título do aviso")
+    .setPlaceholder("Ex: Reunião da facção")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(100);
+
+  const mensagem = new TextInputBuilder()
+    .setCustomId("mensagem")
+    .setLabel("Mensagem")
+    .setPlaceholder("Digite o aviso")
+    .setStyle(TextInputStyle.Paragraph)
+    .setRequired(true)
+    .setMaxLength(1800);
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(titulo),
+    new ActionRowBuilder().addComponents(mensagem)
+  );
+
+  return interaction.showModal(modal);
 }
 
 async function enviarAvisoAgora(interaction) {
-  if (!isGerencia(interaction)) {
+  const [, mencao] = interaction.customId.split(":");
+  const guild = interaction.guild;
+
+  const canalAvisos = await buscarCanalAvisos(guild);
+  if (!canalAvisos) {
     return interaction.reply({
-      content: "❌ Apenas a gerência pode usar este painel.",
+      content: `❌ Não encontrei o canal de avisos.\n📍 ID procurado: \`${getCanalAvisosId()}\``,
       flags: 64
     });
   }
 
-  const [, mencaoTipo] = interaction.customId.split(":");
-  const mensagem = interaction.fields.getTextInputValue("mensagem").trim();
+  const titulo = interaction.fields.getTextInputValue("titulo");
+  const mensagem = interaction.fields.getTextInputValue("mensagem");
+  const prefixoMencao = getTextoMencao(mencao);
 
-  const canal = await interaction.client.channels.fetch(canais.painelAvisos).catch(() => null);
-  if (!canal) {
-    return interaction.reply({
-      content: "❌ Não encontrei o canal de avisos.",
-      flags: 64
-    });
-  }
+  const embed = new EmbedBuilder()
+    .setColor(0xe67e22)
+    .setTitle(`📢 ${titulo}`)
+    .setDescription(mensagem)
+    .setFooter({ text: `SINNERS BOT • Avisos • por ${interaction.user.username}` })
+    .setTimestamp();
 
-  const conteudoMencao = getMencaoConteudo(mencaoTipo);
-
-  await canal.send({
-    content: conteudoMencao || undefined,
-    embeds: [
-      criarEmbedAviso({
-        mensagem,
-        rodape: `SINNERS FAMILY • Aviso enviado por ${interaction.user.username}`
-      })
-    ],
-    allowedMentions: getAllowedMentions(mencaoTipo)
+  await canalAvisos.send({
+    content: prefixoMencao || undefined,
+    embeds: [embed]
   });
 
-  const resultadoDM = await enviarAvisoPrivadoParaAlvos(
-    interaction.guild,
-    mensagem,
-    mencaoTipo
-  );
-
   return interaction.reply({
-    content: [
-      `✅ Aviso enviado com sucesso com menção **${getMencaoLabel(mencaoTipo)}**.`,
-      `📩 Privado: **${resultadoDM.enviados}** enviados`,
-      `⚠️ Falhas no privado: **${resultadoDM.falhas}**`
-    ].join("\n"),
+    content: `✅ Aviso enviado em ${canalAvisos}.`,
     flags: 64
   });
 }
 
 async function agendarAviso(interaction) {
-  if (!isGerencia(interaction)) {
+  const [, token] = interaction.customId.split(":");
+  const sessao = agendamentosTemp.get(token);
+
+  if (!sessao) {
     return interaction.reply({
-      content: "❌ Apenas a gerência pode usar este painel.",
+      content: "❌ Este agendamento expirou. Reabra o painel.",
       flags: 64
     });
   }
 
-  const [, mencaoTipo, diaOffset, horaTextoSeguro] = interaction.customId.split(":");
-  const mensagem = interaction.fields.getTextInputValue("mensagem").trim();
-
-  const dataAgendada = montarDataAgendada(diaOffset, horaTextoSeguro);
-
-  if (!dataAgendada) {
+  const canalAvisos = await buscarCanalAvisos(interaction.guild);
+  if (!canalAvisos) {
     return interaction.reply({
-      content: "❌ Não foi possível montar a data do agendamento. Tente novamente.",
+      content: `❌ Não encontrei o canal de avisos.\n📍 ID procurado: \`${getCanalAvisosId()}\``,
       flags: 64
     });
   }
 
-  if (dataAgendada.getTime() <= Date.now()) {
+  const titulo = interaction.fields.getTextInputValue("titulo");
+  const mensagem = interaction.fields.getTextInputValue("mensagem");
+
+  const agora = new Date();
+  const destino = new Date();
+
+  if (sessao.dia === "amanha") {
+    destino.setDate(destino.getDate() + 1);
+  }
+
+  const [hora, minuto] = String(sessao.hora || "00:00").split(":");
+  destino.setHours(Number(hora), Number(minuto), 0, 0);
+
+  if (destino.getTime() <= agora.getTime()) {
     return interaction.reply({
-      content: "❌ O horário escolhido já passou. Escolha outro.",
+      content: "❌ O horário escolhido já passou.",
       flags: 64
     });
   }
 
-  await AvisoAgendado.create({
-    criadoPorId: interaction.user.id,
-    criadoPorTag: interaction.user.tag,
-    guildId: interaction.guild.id,
-    canalId: canais.painelAvisos,
-    titulo: "Aviso da Família",
-    mensagem,
-    mencaoTipo,
-    agendarPara: dataAgendada,
-    agendarTexto: formatarDataBr(dataAgendada)
-  });
+  const delay = destino.getTime() - agora.getTime();
+  const mencaoTexto = getTextoMencao(sessao.mencao);
+
+  setTimeout(async () => {
+    try {
+      const embed = new EmbedBuilder()
+        .setColor(0xe67e22)
+        .setTitle(`📢 ${titulo}`)
+        .setDescription(mensagem)
+        .setFooter({ text: "SINNERS BOT • Aviso agendado" })
+        .setTimestamp();
+
+      await canalAvisos.send({
+        content: mencaoTexto || undefined,
+        embeds: [embed]
+      });
+    } catch (error) {
+      console.error("Erro ao enviar aviso agendado:", error);
+    }
+  }, delay);
+
+  agendamentosTemp.delete(token);
 
   return interaction.reply({
-    content: [
-      "✅ Aviso agendado com sucesso.",
-      `🔔 Menção: **${getMencaoLabel(mencaoTipo)}**`,
-      `⏰ Envio: **${formatarDataBr(dataAgendada)}**`,
-      "📩 O bot também tentará mandar no privado quando chegar o horário."
-    ].join("\n"),
+    content: `✅ Aviso agendado para **${destino.toLocaleString("pt-BR")}** em ${canalAvisos}.`,
     flags: 64
   });
 }
@@ -435,15 +413,12 @@ module.exports = {
   AVISO_SELECT_HORA_PREFIX,
   AVISO_MODAL_AGORA_PREFIX,
   AVISO_MODAL_AGENDAR_PREFIX,
+  criarPainelAvisos,
   abrirModalAvisoAgora,
   abrirModalAvisoAgendar,
   processarSelectMencao,
   processarSelectDia,
   processarSelectHora,
-  criarEmbedAviso,
-  criarPainelAvisos,
   enviarAvisoAgora,
-  agendarAviso,
-  getAllowedMentions,
-  getMencaoConteudo
+  agendarAviso
 };
