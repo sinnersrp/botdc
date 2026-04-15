@@ -22,15 +22,18 @@ const {
   BAU_BUTTON_SAIDA,
   BAU_BUTTON_TRANSFERIR,
   BAU_BUTTON_VER,
-  BAU_SELECT_ENTRADA,
-  BAU_SELECT_SAIDA,
-  BAU_SELECT_TRANSFERIR,
-  BAU_MODAL_PREFIX,
+  BAU_SELECT_CATEGORIA,
+  BAU_SELECT_ITEM,
+  BAU_BUTTON_VOLTAR,
+  BAU_BUTTON_CANCELAR,
+  BAU_BUTTON_CONFIRMAR,
+  BAU_MODAL_QUANTIDADE,
   abrirSelecaoEntradaBau,
   abrirSelecaoSaidaBau,
   abrirSelecaoTransferirBau,
-  processarModalBauGerencia,
   processarSelecaoBauGerencia,
+  processarModalBauGerencia,
+  processarBotaoBauGerencia,
   verEstoqueBauGerencia
 } = require("./utils/painelBau");
 
@@ -177,6 +180,15 @@ client.on("interactionCreate", async (interaction) => {
         return;
       }
 
+      if (
+        interaction.customId.startsWith(`${BAU_BUTTON_VOLTAR}:`) ||
+        interaction.customId.startsWith(`${BAU_BUTTON_CANCELAR}:`) ||
+        interaction.customId.startsWith(`${BAU_BUTTON_CONFIRMAR}:`)
+      ) {
+        await processarBotaoBauGerencia(interaction);
+        return;
+      }
+
       if (interaction.customId === CONTROLE_BUTTON_RETIRAR) {
         await abrirSelecaoRetirar(interaction);
         return;
@@ -243,9 +255,8 @@ client.on("interactionCreate", async (interaction) => {
 
     if (interaction.isStringSelectMenu()) {
       if (
-        interaction.customId === BAU_SELECT_ENTRADA ||
-        interaction.customId === BAU_SELECT_SAIDA ||
-        interaction.customId === BAU_SELECT_TRANSFERIR
+        interaction.customId.startsWith(`${BAU_SELECT_CATEGORIA}:`) ||
+        interaction.customId.startsWith(`${BAU_SELECT_ITEM}:`)
       ) {
         await processarSelecaoBauGerencia(interaction, client);
         return;
@@ -288,7 +299,7 @@ client.on("interactionCreate", async (interaction) => {
         return;
       }
 
-      if (interaction.customId.startsWith(`${BAU_MODAL_PREFIX}:`)) {
+      if (interaction.customId.startsWith(`${BAU_MODAL_QUANTIDADE}:`)) {
         await processarModalBauGerencia(interaction, client);
         return;
       }
