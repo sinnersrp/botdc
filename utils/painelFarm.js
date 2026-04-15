@@ -2,20 +2,32 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  EmbedBuilder,
   ModalBuilder,
   TextInputBuilder,
-  TextInputStyle
+  TextInputStyle,
+  EmbedBuilder
 } = require("discord.js");
+
+const crypto = require("crypto");
 const FarmRegistro = require("../models/FarmRegistro");
-const FarmPendente = require("../models/FarmPendente");
 const getSemanaRP = require("./semanaRP");
 const { sincronizarPlanilhaFarm } = require("./googleSheetsFarm");
-const { sincronizarCaixaFaccao } = require("./financeiroFaccao");
+const { podeUsarFarm } = require("./permissoes");
 
 const FARM_BUTTON_REGISTRAR = "farm_registrar";
+
+const FARM_BUTTON_VOLTAR = "farm_voltar";
+const FARM_BUTTON_CANCELAR = "farm_cancelar";
+const FARM_BUTTON_CONFIRMAR = "farm_confirmar";
+
 const FARM_MODAL_REGISTRAR = "farm_modal_registrar";
-const META_SEMANAL = 100000;
+
+const sessoesFarm = new Map();
+const aguardandoComprovante = new Map();
+
+function gerarToken() {
+  return crypto.randomBytes(8).toString("hex");
+}
 
 function formatMoney(value) {
   return new Intl.NumberFormat("pt-BR").format(Number(value) || 0);
@@ -29,17 +41,18 @@ function criarPainelFarm() {
       [
         "Use este painel para registrar seu dinheiro sujo semanal.",
         "",
-        "**Como funciona:**",
-        "• clique em **Registrar dinheiro sujo**",
-        "• informe o valor",
-        "• depois envie a **foto do comprovante** no canal",
+        "**Fluxo:**",
+        "1. informar valor",
+        "2. confirmar",
+        "3. enviar comprovante no canal",
         "",
-        "O bot vai registrar automaticamente."
+        "Agora com:",
+        "• voltar",
+        "• cancelar",
+        "• confirmar"
       ].join("\n")
     )
-    .setFooter({
-      text: "SINNERS BOT • Dinheiro sujo"
-    })
+    .setFooter({ text: "SINNERS BOT • Dinheiro Sujo" })
     .setTimestamp();
 
   const row = new ActionRowBuilder().addComponents(
@@ -56,162 +69,223 @@ function criarPainelFarm() {
   };
 }
 
-function criarModalFarm() {
-  const modal = new ModalBuilder()
-    .setCustomId(FARM_MODAL_REGISTRAR)
-    .setTitle("Registrar dinheiro sujo");
+function criarEmbedConfirmacao(sessao) {
+  return new EmbedBuilder()
+    .setColor(0xe67e22)
+    .setTitle("✅ Confirmar registro de dinheiro sujo")
+    .setDescription(
+      [
+        `Valor: **R$ ${formatMoney(sessao.valor)}**`,
+        `Semana: **${sessao.semanaId}**`,
+        "",
+        "Depois de confirmar, envie a **foto do comprovante** neste canal."
+      ].join("\n")
+    )
+    .setFooter({ text: "SINNERS BOT • Confirmação" })
+    .setTimestamp();
+}
 
-  const valor = new TextInputBuilder()
-    .setCustomId("valor")
-    .setLabel("Valor do dinheiro sujo")
-    .setPlaceholder("Ex: 100000")
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true)
-    .setMaxLength(20);
+function criarBotoesNavegacao(token, podeConfirmar = false) {
+  const row = new ActionRowBuilder();
 
-  modal.addComponents(new ActionRowBuilder().addComponents(valor));
-  return modal;
+  row.addComponents(
+    new ButtonBuilder()
+      .setCustomId(`${FARM_BUTTON_CANCELAR}:${token}`)
+      .setLabel("Cancelar")
+      .setEmoji("❌")
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  if (podeConfirmar) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${FARM_BUTTON_CONFIRMAR}:${token}`)
+        .setLabel("Confirmar")
+        .setEmoji("✅")
+        .setStyle(ButtonStyle.Success)
+    );
+  }
+
+  return row;
 }
 
 async function abrirModalFarm(interaction) {
-  await interaction.showModal(criarModalFarm());
-}
-
-async function processarModalFarm(interaction) {
-  const valorBruto = interaction.fields.getTextInputValue("valor").trim();
-  const valor = Number(valorBruto.replace(/\./g, "").replace(",", "."));
-  const { semanaId } = getSemanaRP();
-
-  if (!Number.isFinite(valor) || valor <= 0) {
+  if (!podeUsarFarm(interaction.member, interaction.channel)) {
     return interaction.reply({
-      content: "❌ Valor inválido. Informe um número maior que zero.",
+      content: "❌ Você não pode registrar dinheiro sujo neste canal.",
       flags: 64
     });
   }
 
-  await FarmPendente.findOneAndDelete({
-    userId: interaction.user.id,
-    canalId: interaction.channel.id
-  }).catch(() => null);
+  const modal = new ModalBuilder()
+    .setCustomId(FARM_MODAL_REGISTRAR)
+    .setTitle("Registrar dinheiro sujo");
 
-  const agora = new Date();
-  const expiraEm = new Date(agora.getTime() + 10 * 60 * 1000);
+  const valorInput = new TextInputBuilder()
+    .setCustomId("valor")
+    .setLabel("Valor")
+    .setPlaceholder("Ex: 50000")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(15);
 
-  await FarmPendente.create({
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(valorInput)
+  );
+
+  return interaction.showModal(modal);
+}
+
+async function processarModalFarm(interaction) {
+  if (!podeUsarFarm(interaction.member, interaction.channel)) {
+    return interaction.reply({
+      content: "❌ Você não pode registrar dinheiro sujo neste canal.",
+      flags: 64
+    });
+  }
+
+  const valorBruto = interaction.fields.getTextInputValue("valor");
+  const valor = Number(String(valorBruto).replace(/[^\d]/g, ""));
+
+  if (!Number.isInteger(valor) || valor <= 0) {
+    return interaction.reply({
+      content: "❌ Valor inválido. Informe um número inteiro maior que zero.",
+      flags: 64
+    });
+  }
+
+  const semana = getSemanaRP();
+  const token = gerarToken();
+
+  sessoesFarm.set(token, {
+    token,
     userId: interaction.user.id,
-    username: interaction.user.username,
-    canalId: interaction.channel.id,
-    semanaId,
+    channelId: interaction.channelId,
     valor,
-    criadoEm: agora,
-    expiraEm
+    semanaId: semana.semanaId
   });
 
   return interaction.reply({
-    content: [
-      "📸 Agora envie a **foto do comprovante** neste canal para concluir o registro.",
-      `💰 Valor informado: **R$ ${formatMoney(valor)}**`,
-      "⏳ Esse registro pendente expira em **10 minutos**."
-    ].join("\n"),
+    embeds: [criarEmbedConfirmacao({
+      valor,
+      semanaId: semana.semanaId
+    })],
+    components: [criarBotoesNavegacao(token, true)],
     flags: 64
   });
 }
 
-async function processarMensagemComprovanteFarm(message) {
-  if (!message.guild) return;
-  if (message.author.bot) return;
-  if (!message.attachments || !message.attachments.size) return;
+async function confirmarFarm(interaction, token) {
+  const sessao = sessoesFarm.get(token);
 
-  const pendente = await FarmPendente.findOne({
-    userId: message.author.id,
-    canalId: message.channel.id
+  if (!sessao) {
+    return interaction.reply({
+      content: "❌ Esta sessão expirou. Reabra o painel.",
+      flags: 64
+    });
+  }
+
+  if (sessao.userId !== interaction.user.id) {
+    return interaction.reply({
+      content: "❌ Apenas quem abriu este fluxo pode confirmar.",
+      flags: 64
+    });
+  }
+
+  aguardandoComprovante.set(interaction.user.id, {
+    userId: interaction.user.id,
+    channelId: sessao.channelId,
+    valor: sessao.valor,
+    semanaId: sessao.semanaId,
+    criadoEm: Date.now()
   });
 
-  if (!pendente) return;
+  sessoesFarm.delete(token);
 
-  const anexo = message.attachments.first();
-  const semanaId = pendente.semanaId;
-  const cargo = "membro";
+  return interaction.update({
+    content: `✅ Registro preparado para **R$ ${formatMoney(sessao.valor)}**.\nAgora envie a **foto do comprovante** neste canal.`,
+    embeds: [],
+    components: []
+  });
+}
+
+async function cancelarFarm(interaction, token) {
+  const sessao = sessoesFarm.get(token);
+
+  if (sessao && sessao.userId !== interaction.user.id) {
+    return interaction.reply({
+      content: "❌ Apenas quem abriu este fluxo pode cancelar.",
+      flags: 64
+    });
+  }
+
+  sessoesFarm.delete(token);
+
+  return interaction.update({
+    content: "❌ Operação cancelada.",
+    embeds: [],
+    components: []
+  });
+}
+
+async function processarBotaoFarm(interaction) {
+  if (interaction.customId.startsWith(`${FARM_BUTTON_CANCELAR}:`)) {
+    const [, token] = interaction.customId.split(":");
+    return cancelarFarm(interaction, token);
+  }
+
+  if (interaction.customId.startsWith(`${FARM_BUTTON_CONFIRMAR}:`)) {
+    const [, token] = interaction.customId.split(":");
+    return confirmarFarm(interaction, token);
+  }
+}
+
+async function processarMensagemComprovanteFarm(message) {
+  if (!message.guild || message.author.bot) return;
+
+  const pendencia = aguardandoComprovante.get(message.author.id);
+  if (!pendencia) return;
+
+  if (String(message.channelId) !== String(pendencia.channelId)) return;
+
+  const possuiAnexo = message.attachments && message.attachments.size > 0;
+  if (!possuiAnexo) return;
+
+  const primeiroAnexo = message.attachments.first();
+  const comprovante = primeiroAnexo?.url || "Sem comprovante";
 
   await FarmRegistro.create({
     userId: message.author.id,
     username: message.author.username,
-    cargo,
-    valor: pendente.valor,
-    comprovante: anexo?.url || "Sem comprovante",
-    semanaId,
+    cargo: "membro",
+    valor: pendencia.valor,
+    comprovante,
+    semanaId: pendencia.semanaId,
     registradoEm: new Date()
   });
 
-  const registrosSemana = await FarmRegistro.find({
-    userId: message.author.id,
-    semanaId
+  aguardandoComprovante.delete(message.author.id);
+
+  try {
+    await sincronizarPlanilhaFarm(message.guild);
+  } catch (error) {
+    console.error("Erro ao sincronizar planilha após registro de farm:", error);
+  }
+
+  await message.reply({
+    content: `✅ Dinheiro sujo registrado com sucesso: **R$ ${formatMoney(pendencia.valor)}**`
   });
-
-  const totalSemana = registrosSemana.reduce(
-    (acc, item) => acc + (Number(item.valor) || 0),
-    0
-  );
-
-  const excedente = Math.max(0, totalSemana - META_SEMANAL);
-  const valorLimpo = Math.floor(excedente * 0.5);
-
-  await sincronizarCaixaFaccao().catch((error) => {
-    console.error("Erro ao sincronizar caixa após registro:", error);
-  });
-
-  await sincronizarPlanilhaFarm(message.guild).catch((error) => {
-    console.error("Erro ao sincronizar planilha após registro:", error);
-  });
-
-  const embed = new EmbedBuilder()
-    .setColor(0x57f287)
-    .setTitle("✅ Dinheiro sujo registrado com sucesso")
-    .addFields(
-      {
-        name: "💰 Valor enviado",
-        value: `**R$ ${formatMoney(pendente.valor)}**`,
-        inline: true
-      },
-      {
-        name: "📊 Total da semana",
-        value: `**R$ ${formatMoney(totalSemana)}**`,
-        inline: true
-      },
-      {
-        name: "🗓️ Semana",
-        value: `**${semanaId}**`,
-        inline: false
-      },
-      {
-        name: "📈 Excedente",
-        value: `**R$ ${formatMoney(excedente)}**`,
-        inline: true
-      },
-      {
-        name: "🧼 Valor limpo estimado",
-        value: `**R$ ${formatMoney(valorLimpo)}**`,
-        inline: true
-      }
-    )
-    .setImage(anexo?.url || null)
-    .setFooter({
-      text: "SINNERS BOT • Dinheiro sujo"
-    })
-    .setTimestamp();
-
-  await message.channel.send({
-    embeds: [embed]
-  });
-
-  await FarmPendente.deleteOne({ _id: pendente._id });
 }
 
 module.exports = {
   FARM_BUTTON_REGISTRAR,
+  FARM_BUTTON_VOLTAR,
+  FARM_BUTTON_CANCELAR,
+  FARM_BUTTON_CONFIRMAR,
   FARM_MODAL_REGISTRAR,
-  abrirModalFarm,
   criarPainelFarm,
+  abrirModalFarm,
+  processarModalFarm,
   processarMensagemComprovanteFarm,
-  processarModalFarm
+  processarBotaoFarm
 };

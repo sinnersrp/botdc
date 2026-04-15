@@ -8,19 +8,28 @@ const {
   TextInputStyle,
   EmbedBuilder
 } = require("discord.js");
+
+const crypto = require("crypto");
 const { canais } = require("../config/config");
 
 const AVISO_BUTTON_AGORA = "aviso_agora";
 const AVISO_BUTTON_AGENDAR = "aviso_agendar";
 
-const AVISO_SELECT_MENCAO_PREFIX = "aviso_mencao";
-const AVISO_SELECT_DIA_PREFIX = "aviso_dia";
-const AVISO_SELECT_HORA_PREFIX = "aviso_hora";
+const AVISO_SELECT_MENCAO = "aviso_select_mencao";
+const AVISO_SELECT_DIA = "aviso_select_dia";
+const AVISO_SELECT_HORA = "aviso_select_hora";
 
-const AVISO_MODAL_AGORA_PREFIX = "aviso_modal_agora";
-const AVISO_MODAL_AGENDAR_PREFIX = "aviso_modal_agendar";
+const AVISO_BUTTON_VOLTAR = "aviso_voltar";
+const AVISO_BUTTON_CANCELAR = "aviso_cancelar";
+const AVISO_BUTTON_CONFIRMAR = "aviso_confirmar";
 
-const agendamentosTemp = new Map();
+const AVISO_MODAL_CONTEUDO = "aviso_modal_conteudo";
+
+const sessoesAvisos = new Map();
+
+function gerarToken() {
+  return crypto.randomBytes(8).toString("hex");
+}
 
 function normalizarTexto(valor = "") {
   return String(valor || "")
@@ -67,7 +76,6 @@ async function buscarCanalAvisos(guild) {
 function getTextoMencao(tipo) {
   if (tipo === "everyone") return "@everyone";
   if (tipo === "here") return "@here";
-  if (tipo === "sem-mencao") return "";
   return "";
 }
 
@@ -77,11 +85,16 @@ function criarPainelAvisos() {
     .setTitle("📢 Painel de Avisos")
     .setDescription(
       [
-        "Use este painel para enviar avisos no canal oficial de avisos.",
+        "Use este painel para enviar avisos no canal oficial.",
         "",
-        "**Opções:**",
-        "• **Aviso agora** → envia imediatamente",
-        "• **Agendar aviso** → programa para depois"
+        "**Fluxos disponíveis:**",
+        "• **Aviso agora**",
+        "• **Agendar aviso**",
+        "",
+        "Agora com:",
+        "• voltar",
+        "• cancelar",
+        "• confirmar"
       ].join("\n")
     )
     .setFooter({ text: "SINNERS BOT • Avisos" })
@@ -106,76 +119,223 @@ function criarPainelAvisos() {
   };
 }
 
-async function abrirModalAvisoAgora(interaction) {
-  const select = new StringSelectMenuBuilder()
-    .setCustomId(`${AVISO_SELECT_MENCAO_PREFIX}:agora`)
-    .setPlaceholder("Escolha como o aviso vai marcar as pessoas")
-    .addOptions([
-      {
-        label: "Sem menção",
-        value: "sem-mencao",
-        description: "Envia o aviso sem marcar ninguém"
-      },
-      {
-        label: "@everyone",
-        value: "everyone",
-        description: "Marca todo mundo"
-      },
-      {
-        label: "@here",
-        value: "here",
-        description: "Marca apenas quem estiver online"
-      }
-    ]);
+function criarEmbedMencao(modo) {
+  return new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle(modo === "agora" ? "📣 Aviso agora" : "⏰ Agendar aviso")
+    .setDescription(
+      [
+        "**Etapa 1 de 4**",
+        "Escolha o tipo de menção."
+      ].join("\n")
+    )
+    .setFooter({ text: "SINNERS BOT • Avisos" })
+    .setTimestamp();
+}
 
-  const row = new ActionRowBuilder().addComponents(select);
+function criarSelectMencao(token) {
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(`${AVISO_SELECT_MENCAO}:${token}`)
+      .setPlaceholder("Escolha a menção")
+      .addOptions([
+        {
+          label: "Sem menção",
+          value: "sem-mencao",
+          description: "Envia o aviso sem marcar ninguém"
+        },
+        {
+          label: "@everyone",
+          value: "everyone",
+          description: "Marca todo mundo"
+        },
+        {
+          label: "@here",
+          value: "here",
+          description: "Marca quem estiver online"
+        }
+      ])
+  );
+}
+
+function criarEmbedDia() {
+  return new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle("⏰ Agendar aviso")
+    .setDescription(
+      [
+        "**Etapa 2 de 4**",
+        "Escolha o dia do aviso."
+      ].join("\n")
+    )
+    .setFooter({ text: "SINNERS BOT • Avisos" })
+    .setTimestamp();
+}
+
+function criarSelectDia(token) {
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(`${AVISO_SELECT_DIA}:${token}`)
+      .setPlaceholder("Escolha o dia")
+      .addOptions([
+        { label: "Hoje", value: "hoje" },
+        { label: "Amanhã", value: "amanha" }
+      ])
+  );
+}
+
+function criarEmbedHora() {
+  return new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle("⏰ Agendar aviso")
+    .setDescription(
+      [
+        "**Etapa 3 de 4**",
+        "Escolha a hora do aviso."
+      ].join("\n")
+    )
+    .setFooter({ text: "SINNERS BOT • Avisos" })
+    .setTimestamp();
+}
+
+function criarSelectHora(token) {
+  const options = [];
+  for (let h = 0; h < 24; h++) {
+    const hh = String(h).padStart(2, "0");
+    options.push({
+      label: `${hh}:00`,
+      value: `${hh}:00`
+    });
+  }
+
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(`${AVISO_SELECT_HORA}:${token}`)
+      .setPlaceholder("Escolha a hora")
+      .addOptions(options)
+  );
+}
+
+function criarBotoesNavegacao(token, etapa, podeConfirmar = false) {
+  const row = new ActionRowBuilder();
+
+  if (etapa !== "mencao") {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${AVISO_BUTTON_VOLTAR}:${token}`)
+        .setLabel("Voltar")
+        .setEmoji("⬅️")
+        .setStyle(ButtonStyle.Secondary)
+    );
+  }
+
+  row.addComponents(
+    new ButtonBuilder()
+      .setCustomId(`${AVISO_BUTTON_CANCELAR}:${token}`)
+      .setLabel("Cancelar")
+      .setEmoji("❌")
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  if (podeConfirmar) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${AVISO_BUTTON_CONFIRMAR}:${token}`)
+        .setLabel("Confirmar")
+        .setEmoji("✅")
+        .setStyle(ButtonStyle.Success)
+    );
+  }
+
+  return row;
+}
+
+function criarEmbedConfirmacao(sessao) {
+  const titulo = sessao.modo === "agora" ? "✅ Confirmar aviso agora" : "✅ Confirmar aviso agendado";
+
+  const linhas = [
+    `**Etapa final**`,
+    `Modo: **${sessao.modo === "agora" ? "Aviso agora" : "Agendar aviso"}**`,
+    `Menção: **${sessao.mencao}**`,
+    `Título: **${sessao.titulo}**`,
+    `Mensagem:`,
+    `${sessao.mensagem}`
+  ];
+
+  if (sessao.modo === "agendar") {
+    linhas.splice(2, 0, `Dia: **${sessao.dia}**`, `Hora: **${sessao.hora}**`);
+  }
+
+  return new EmbedBuilder()
+    .setColor(0xe67e22)
+    .setTitle(titulo)
+    .setDescription(linhas.join("\n"))
+    .setFooter({ text: "SINNERS BOT • Confirmação" })
+    .setTimestamp();
+}
+
+async function abrirFluxoAviso(interaction, modo) {
+  const token = gerarToken();
+
+  sessoesAvisos.set(token, {
+    token,
+    userId: interaction.user.id,
+    guildId: interaction.guildId,
+    modo,
+    etapa: "mencao",
+    mencao: null,
+    dia: null,
+    hora: null,
+    titulo: null,
+    mensagem: null
+  });
 
   return interaction.reply({
-    content: "📢 Escolha como o aviso vai marcar as pessoas:",
-    components: [row],
+    embeds: [criarEmbedMencao(modo)],
+    components: [
+      criarSelectMencao(token),
+      criarBotoesNavegacao(token, "mencao")
+    ],
     flags: 64
   });
+}
+
+async function abrirModalAvisoAgora(interaction) {
+  return abrirFluxoAviso(interaction, "agora");
 }
 
 async function abrirModalAvisoAgendar(interaction) {
-  const select = new StringSelectMenuBuilder()
-    .setCustomId(`${AVISO_SELECT_MENCAO_PREFIX}:agendar`)
-    .setPlaceholder("Escolha como o aviso agendado vai marcar as pessoas")
-    .addOptions([
-      {
-        label: "Sem menção",
-        value: "sem-mencao",
-        description: "Envia o aviso sem marcar ninguém"
-      },
-      {
-        label: "@everyone",
-        value: "everyone",
-        description: "Marca todo mundo"
-      },
-      {
-        label: "@here",
-        value: "here",
-        description: "Marca apenas quem estiver online"
-      }
-    ]);
-
-  const row = new ActionRowBuilder().addComponents(select);
-
-  return interaction.reply({
-    content: "⏰ Escolha como o aviso agendado vai marcar as pessoas:",
-    components: [row],
-    flags: 64
-  });
+  return abrirFluxoAviso(interaction, "agendar");
 }
 
 async function processarSelectMencao(interaction) {
-  const [, modo] = interaction.customId.split(":");
-  const mencao = interaction.values[0];
+  const [, token] = interaction.customId.split(":");
+  const sessao = sessoesAvisos.get(token);
 
-  if (modo === "agora") {
+  if (!sessao) {
+    return interaction.reply({
+      content: "❌ Esta sessão expirou. Reabra o painel.",
+      flags: 64
+    });
+  }
+
+  if (sessao.userId !== interaction.user.id) {
+    return interaction.reply({
+      content: "❌ Apenas quem abriu este fluxo pode continuar.",
+      flags: 64
+    });
+  }
+
+  sessao.mencao = interaction.values[0];
+  sessoesAvisos.set(token, sessao);
+
+  if (sessao.modo === "agora") {
+    sessao.etapa = "conteudo";
+    sessoesAvisos.set(token, sessao);
+
     const modal = new ModalBuilder()
-      .setCustomId(`${AVISO_MODAL_AGORA_PREFIX}:${mencao}`)
-      .setTitle("Enviar aviso agora");
+      .setCustomId(`${AVISO_MODAL_CONTEUDO}:${token}`)
+      .setTitle("Aviso agora");
 
     const titulo = new TextInputBuilder()
       .setCustomId("titulo")
@@ -201,88 +361,79 @@ async function processarSelectMencao(interaction) {
     return interaction.showModal(modal);
   }
 
-  const token = `${interaction.user.id}_${Date.now()}`;
-  agendamentosTemp.set(token, {
-    userId: interaction.user.id,
-    guildId: interaction.guildId,
-    mencao
-  });
-
-  const selectDia = new StringSelectMenuBuilder()
-    .setCustomId(`${AVISO_SELECT_DIA_PREFIX}:${token}`)
-    .setPlaceholder("Escolha o dia")
-    .addOptions([
-      { label: "Hoje", value: "hoje" },
-      { label: "Amanhã", value: "amanha" }
-    ]);
-
-  const row = new ActionRowBuilder().addComponents(selectDia);
+  sessao.etapa = "dia";
+  sessoesAvisos.set(token, sessao);
 
   return interaction.update({
-    content: "📅 Escolha o dia do aviso:",
-    embeds: [],
-    components: [row]
+    embeds: [criarEmbedDia()],
+    components: [
+      criarSelectDia(token),
+      criarBotoesNavegacao(token, "dia")
+    ]
   });
 }
 
 async function processarSelectDia(interaction) {
   const [, token] = interaction.customId.split(":");
-  const sessao = agendamentosTemp.get(token);
+  const sessao = sessoesAvisos.get(token);
 
   if (!sessao) {
     return interaction.reply({
-      content: "❌ Esta seleção expirou. Reabra o painel.",
+      content: "❌ Esta sessão expirou. Reabra o painel.",
+      flags: 64
+    });
+  }
+
+  if (sessao.userId !== interaction.user.id) {
+    return interaction.reply({
+      content: "❌ Apenas quem abriu este fluxo pode continuar.",
       flags: 64
     });
   }
 
   sessao.dia = interaction.values[0];
-  agendamentosTemp.set(token, sessao);
-
-  const options = [];
-  for (let h = 0; h < 24; h++) {
-    const hh = String(h).padStart(2, "0");
-    options.push({
-      label: `${hh}:00`,
-      value: `${hh}:00`
-    });
-  }
-
-  const selectHora = new StringSelectMenuBuilder()
-    .setCustomId(`${AVISO_SELECT_HORA_PREFIX}:${token}`)
-    .setPlaceholder("Escolha a hora")
-    .addOptions(options);
-
-  const row = new ActionRowBuilder().addComponents(selectHora);
+  sessao.etapa = "hora";
+  sessoesAvisos.set(token, sessao);
 
   return interaction.update({
-    content: "🕒 Escolha a hora do aviso:",
-    components: [row]
+    embeds: [criarEmbedHora()],
+    components: [
+      criarSelectHora(token),
+      criarBotoesNavegacao(token, "hora")
+    ]
   });
 }
 
 async function processarSelectHora(interaction) {
   const [, token] = interaction.customId.split(":");
-  const sessao = agendamentosTemp.get(token);
+  const sessao = sessoesAvisos.get(token);
 
   if (!sessao) {
     return interaction.reply({
-      content: "❌ Esta seleção expirou. Reabra o painel.",
+      content: "❌ Esta sessão expirou. Reabra o painel.",
+      flags: 64
+    });
+  }
+
+  if (sessao.userId !== interaction.user.id) {
+    return interaction.reply({
+      content: "❌ Apenas quem abriu este fluxo pode continuar.",
       flags: 64
     });
   }
 
   sessao.hora = interaction.values[0];
-  agendamentosTemp.set(token, sessao);
+  sessao.etapa = "conteudo";
+  sessoesAvisos.set(token, sessao);
 
   const modal = new ModalBuilder()
-    .setCustomId(`${AVISO_MODAL_AGENDAR_PREFIX}:${token}`)
+    .setCustomId(`${AVISO_MODAL_CONTEUDO}:${token}`)
     .setTitle("Agendar aviso");
 
   const titulo = new TextInputBuilder()
     .setCustomId("titulo")
     .setLabel("Título do aviso")
-    .setPlaceholder("Ex: Reunião da facção")
+    .setPlaceholder("Ex: Reunião")
     .setStyle(TextInputStyle.Short)
     .setRequired(true)
     .setMaxLength(100);
@@ -303,61 +454,193 @@ async function processarSelectHora(interaction) {
   return interaction.showModal(modal);
 }
 
-async function enviarAvisoAgora(interaction) {
-  const [, mencao] = interaction.customId.split(":");
-  const guild = interaction.guild;
+async function processarModalConteudoAviso(interaction) {
+  const [, token] = interaction.customId.split(":");
+  const sessao = sessoesAvisos.get(token);
 
-  const canalAvisos = await buscarCanalAvisos(guild);
-  if (!canalAvisos) {
+  if (!sessao) {
     return interaction.reply({
-      content: `❌ Não encontrei o canal de avisos.\n📍 ID procurado: \`${getCanalAvisosId()}\``,
+      content: "❌ Esta sessão expirou. Reabra o painel.",
       flags: 64
     });
   }
 
-  const titulo = interaction.fields.getTextInputValue("titulo");
-  const mensagem = interaction.fields.getTextInputValue("mensagem");
-  const prefixoMencao = getTextoMencao(mencao);
+  if (sessao.userId !== interaction.user.id) {
+    return interaction.reply({
+      content: "❌ Apenas quem abriu este fluxo pode continuar.",
+      flags: 64
+    });
+  }
 
-  const embed = new EmbedBuilder()
-    .setColor(0xe67e22)
-    .setTitle(`📢 ${titulo}`)
-    .setDescription(mensagem)
-    .setFooter({ text: `SINNERS BOT • Avisos • por ${interaction.user.username}` })
-    .setTimestamp();
-
-  await canalAvisos.send({
-    content: prefixoMencao || undefined,
-    embeds: [embed]
-  });
+  sessao.titulo = interaction.fields.getTextInputValue("titulo");
+  sessao.mensagem = interaction.fields.getTextInputValue("mensagem");
+  sessao.etapa = "confirmacao";
+  sessoesAvisos.set(token, sessao);
 
   return interaction.reply({
-    content: `✅ Aviso enviado em ${canalAvisos}.`,
+    embeds: [criarEmbedConfirmacao(sessao)],
+    components: [criarBotoesNavegacao(token, "confirmacao", true)],
     flags: 64
   });
 }
 
-async function agendarAviso(interaction) {
-  const [, token] = interaction.customId.split(":");
-  const sessao = agendamentosTemp.get(token);
+async function voltarFluxoAviso(interaction, token) {
+  const sessao = sessoesAvisos.get(token);
 
   if (!sessao) {
     return interaction.reply({
-      content: "❌ Este agendamento expirou. Reabra o painel.",
+      content: "❌ Esta sessão expirou. Reabra o painel.",
+      flags: 64
+    });
+  }
+
+  if (sessao.userId !== interaction.user.id) {
+    return interaction.reply({
+      content: "❌ Apenas quem abriu este fluxo pode continuar.",
+      flags: 64
+    });
+  }
+
+  if (sessao.etapa === "dia") {
+    sessao.etapa = "mencao";
+    sessao.mencao = null;
+    sessoesAvisos.set(token, sessao);
+
+    return interaction.update({
+      embeds: [criarEmbedMencao(sessao.modo)],
+      components: [
+        criarSelectMencao(token),
+        criarBotoesNavegacao(token, "mencao")
+      ]
+    });
+  }
+
+  if (sessao.etapa === "hora") {
+    sessao.etapa = "dia";
+    sessao.dia = null;
+    sessoesAvisos.set(token, sessao);
+
+    return interaction.update({
+      embeds: [criarEmbedDia()],
+      components: [
+        criarSelectDia(token),
+        criarBotoesNavegacao(token, "dia")
+      ]
+    });
+  }
+
+  if (sessao.etapa === "confirmacao") {
+    if (sessao.modo === "agendar") {
+      sessao.etapa = "hora";
+      sessao.titulo = null;
+      sessao.mensagem = null;
+      sessoesAvisos.set(token, sessao);
+
+      return interaction.update({
+        embeds: [criarEmbedHora()],
+        components: [
+          criarSelectHora(token),
+          criarBotoesNavegacao(token, "hora")
+        ]
+      });
+    }
+
+    sessao.etapa = "mencao";
+    sessao.titulo = null;
+    sessao.mensagem = null;
+    sessoesAvisos.set(token, sessao);
+
+    return interaction.update({
+      embeds: [criarEmbedMencao(sessao.modo)],
+      components: [
+        criarSelectMencao(token),
+        criarBotoesNavegacao(token, "mencao")
+      ]
+    });
+  }
+
+  return interaction.reply({
+    content: "❌ Não há etapa anterior disponível.",
+    flags: 64
+  });
+}
+
+async function cancelarFluxoAviso(interaction, token) {
+  const sessao = sessoesAvisos.get(token);
+
+  if (sessao && sessao.userId !== interaction.user.id) {
+    return interaction.reply({
+      content: "❌ Apenas quem abriu este fluxo pode cancelar.",
+      flags: 64
+    });
+  }
+
+  sessoesAvisos.delete(token);
+
+  if (interaction.isButton() || interaction.isStringSelectMenu()) {
+    return interaction.update({
+      content: "❌ Operação cancelada.",
+      embeds: [],
+      components: []
+    });
+  }
+
+  return interaction.reply({
+    content: "❌ Operação cancelada.",
+    flags: 64
+  });
+}
+
+async function confirmarFluxoAviso(interaction, token) {
+  const sessao = sessoesAvisos.get(token);
+
+  if (!sessao) {
+    return interaction.reply({
+      content: "❌ Esta sessão expirou. Reabra o painel.",
+      flags: 64
+    });
+  }
+
+  if (sessao.userId !== interaction.user.id) {
+    return interaction.reply({
+      content: "❌ Apenas quem abriu este fluxo pode confirmar.",
       flags: 64
     });
   }
 
   const canalAvisos = await buscarCanalAvisos(interaction.guild);
   if (!canalAvisos) {
-    return interaction.reply({
+    sessoesAvisos.delete(token);
+    return interaction.update({
       content: `❌ Não encontrei o canal de avisos.\n📍 ID procurado: \`${getCanalAvisosId()}\``,
-      flags: 64
+      embeds: [],
+      components: []
     });
   }
 
-  const titulo = interaction.fields.getTextInputValue("titulo");
-  const mensagem = interaction.fields.getTextInputValue("mensagem");
+  const prefixoMencao = getTextoMencao(sessao.mencao);
+
+  if (sessao.modo === "agora") {
+    const embed = new EmbedBuilder()
+      .setColor(0xe67e22)
+      .setTitle(`📢 ${sessao.titulo}`)
+      .setDescription(sessao.mensagem)
+      .setFooter({ text: `SINNERS BOT • Avisos • por ${interaction.user.username}` })
+      .setTimestamp();
+
+    await canalAvisos.send({
+      content: prefixoMencao || undefined,
+      embeds: [embed]
+    });
+
+    sessoesAvisos.delete(token);
+
+    return interaction.update({
+      content: `✅ Aviso enviado em ${canalAvisos}.`,
+      embeds: [],
+      components: []
+    });
+  }
 
   const agora = new Date();
   const destino = new Date();
@@ -370,26 +653,27 @@ async function agendarAviso(interaction) {
   destino.setHours(Number(hora), Number(minuto), 0, 0);
 
   if (destino.getTime() <= agora.getTime()) {
-    return interaction.reply({
+    sessoesAvisos.delete(token);
+    return interaction.update({
       content: "❌ O horário escolhido já passou.",
-      flags: 64
+      embeds: [],
+      components: []
     });
   }
 
   const delay = destino.getTime() - agora.getTime();
-  const mencaoTexto = getTextoMencao(sessao.mencao);
 
   setTimeout(async () => {
     try {
       const embed = new EmbedBuilder()
         .setColor(0xe67e22)
-        .setTitle(`📢 ${titulo}`)
-        .setDescription(mensagem)
+        .setTitle(`📢 ${sessao.titulo}`)
+        .setDescription(sessao.mensagem)
         .setFooter({ text: "SINNERS BOT • Aviso agendado" })
         .setTimestamp();
 
       await canalAvisos.send({
-        content: mencaoTexto || undefined,
+        content: prefixoMencao || undefined,
         embeds: [embed]
       });
     } catch (error) {
@@ -397,28 +681,49 @@ async function agendarAviso(interaction) {
     }
   }, delay);
 
-  agendamentosTemp.delete(token);
+  sessoesAvisos.delete(token);
 
-  return interaction.reply({
+  return interaction.update({
     content: `✅ Aviso agendado para **${destino.toLocaleString("pt-BR")}** em ${canalAvisos}.`,
-    flags: 64
+    embeds: [],
+    components: []
   });
+}
+
+async function processarBotaoAviso(interaction) {
+  if (interaction.customId.startsWith(`${AVISO_BUTTON_VOLTAR}:`)) {
+    const [, token] = interaction.customId.split(":");
+    return voltarFluxoAviso(interaction, token);
+  }
+
+  if (interaction.customId.startsWith(`${AVISO_BUTTON_CANCELAR}:`)) {
+    const [, token] = interaction.customId.split(":");
+    return cancelarFluxoAviso(interaction, token);
+  }
+
+  if (interaction.customId.startsWith(`${AVISO_BUTTON_CONFIRMAR}:`)) {
+    const [, token] = interaction.customId.split(":");
+    return confirmarFluxoAviso(interaction, token);
+  }
 }
 
 module.exports = {
   AVISO_BUTTON_AGORA,
   AVISO_BUTTON_AGENDAR,
-  AVISO_SELECT_MENCAO_PREFIX,
-  AVISO_SELECT_DIA_PREFIX,
-  AVISO_SELECT_HORA_PREFIX,
-  AVISO_MODAL_AGORA_PREFIX,
-  AVISO_MODAL_AGENDAR_PREFIX,
+  AVISO_SELECT_MENCAO,
+  AVISO_SELECT_DIA,
+  AVISO_SELECT_HORA,
+  AVISO_BUTTON_VOLTAR,
+  AVISO_BUTTON_CANCELAR,
+  AVISO_BUTTON_CONFIRMAR,
+  AVISO_MODAL_CONTEUDO,
   criarPainelAvisos,
   abrirModalAvisoAgora,
   abrirModalAvisoAgendar,
   processarSelectMencao,
   processarSelectDia,
   processarSelectHora,
-  enviarAvisoAgora,
-  agendarAviso
+  processarModalConteudoAviso,
+  processarBotaoAviso,
+  buscarCanalAvisos
 };

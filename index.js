@@ -57,27 +57,32 @@ const {
 
 const {
   FARM_BUTTON_REGISTRAR,
+  FARM_BUTTON_CANCELAR,
+  FARM_BUTTON_CONFIRMAR,
   FARM_MODAL_REGISTRAR,
   abrirModalFarm,
+  processarModalFarm,
   processarMensagemComprovanteFarm,
-  processarModalFarm
+  processarBotaoFarm
 } = require("./utils/painelFarm");
 
 const {
   AVISO_BUTTON_AGORA,
   AVISO_BUTTON_AGENDAR,
-  AVISO_SELECT_MENCAO_PREFIX,
-  AVISO_SELECT_DIA_PREFIX,
-  AVISO_SELECT_HORA_PREFIX,
-  AVISO_MODAL_AGORA_PREFIX,
-  AVISO_MODAL_AGENDAR_PREFIX,
+  AVISO_SELECT_MENCAO,
+  AVISO_SELECT_DIA,
+  AVISO_SELECT_HORA,
+  AVISO_BUTTON_VOLTAR,
+  AVISO_BUTTON_CANCELAR,
+  AVISO_BUTTON_CONFIRMAR,
+  AVISO_MODAL_CONTEUDO,
   abrirModalAvisoAgora,
   abrirModalAvisoAgendar,
   processarSelectMencao,
   processarSelectDia,
   processarSelectHora,
-  enviarAvisoAgora,
-  agendarAviso
+  processarModalConteudoAviso,
+  processarBotaoAviso
 } = require("./utils/painelAvisos");
 
 const ajusteGerenciaCommand = require("./commands/ajuste-gerencia");
@@ -218,6 +223,14 @@ client.on("interactionCreate", async (interaction) => {
         return;
       }
 
+      if (
+        interaction.customId.startsWith(`${FARM_BUTTON_CANCELAR}:`) ||
+        interaction.customId.startsWith(`${FARM_BUTTON_CONFIRMAR}:`)
+      ) {
+        await processarBotaoFarm(interaction);
+        return;
+      }
+
       if (interaction.customId === AVISO_BUTTON_AGORA) {
         await abrirModalAvisoAgora(interaction);
         return;
@@ -225,6 +238,15 @@ client.on("interactionCreate", async (interaction) => {
 
       if (interaction.customId === AVISO_BUTTON_AGENDAR) {
         await abrirModalAvisoAgendar(interaction);
+        return;
+      }
+
+      if (
+        interaction.customId.startsWith(`${AVISO_BUTTON_VOLTAR}:`) ||
+        interaction.customId.startsWith(`${AVISO_BUTTON_CANCELAR}:`) ||
+        interaction.customId.startsWith(`${AVISO_BUTTON_CONFIRMAR}:`)
+      ) {
+        await processarBotaoAviso(interaction);
         return;
       }
 
@@ -270,17 +292,17 @@ client.on("interactionCreate", async (interaction) => {
         return;
       }
 
-      if (interaction.customId.startsWith(`${AVISO_SELECT_MENCAO_PREFIX}:`)) {
+      if (interaction.customId.startsWith(`${AVISO_SELECT_MENCAO}:`)) {
         await processarSelectMencao(interaction);
         return;
       }
 
-      if (interaction.customId.startsWith(`${AVISO_SELECT_DIA_PREFIX}:`)) {
+      if (interaction.customId.startsWith(`${AVISO_SELECT_DIA}:`)) {
         await processarSelectDia(interaction);
         return;
       }
 
-      if (interaction.customId.startsWith(`${AVISO_SELECT_HORA_PREFIX}:`)) {
+      if (interaction.customId.startsWith(`${AVISO_SELECT_HORA}:`)) {
         await processarSelectHora(interaction);
         return;
       }
@@ -314,13 +336,8 @@ client.on("interactionCreate", async (interaction) => {
         return;
       }
 
-      if (interaction.customId.startsWith(`${AVISO_MODAL_AGORA_PREFIX}:`)) {
-        await enviarAvisoAgora(interaction);
-        return;
-      }
-
-      if (interaction.customId.startsWith(`${AVISO_MODAL_AGENDAR_PREFIX}:`)) {
-        await agendarAviso(interaction);
+      if (interaction.customId.startsWith(`${AVISO_MODAL_CONTEUDO}:`)) {
+        await processarModalConteudoAviso(interaction);
         return;
       }
 
