@@ -23,27 +23,41 @@ const cargos = {
 };
 
 const itensGerais = [
-  "maconha",
-  "metafetamina",
+  // Drogas
   "cocaina",
-  "lockpick",
-  "capuz",
-  "algema",
-  "colete",
+  "maconha",
+  "metanfetamina",
+
+  // Munições
+  "municao rifle",
+  "municao pistola",
+  "municao submetralhadora",
+
+  // Itens de ação
+  "explosivo c4",
   "hacking",
-  "chip ilegal"
+  "furadeira",
+  "lockpick",
+  "envelope manchado",
+
+  // Utilitários
+  "algemas",
+  "adrenalina",
+  "capuz",
+  "celular",
+  "radio",
+  "chave",
+  "galao",
+
+  // Valores
+  "dinheiro sujo"
 ];
 
 const itensArmas = [
-  "c4",
-  "g36",
-  "m1911",
-  "sub",
+  "g36c mk2",
   "mp5",
-  "fiveseven",
-  "muni pt",
-  "muni sub",
-  "muni fuzil"
+  "fn five seven",
+  "hhk"
 ];
 
 module.exports = {
