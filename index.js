@@ -38,13 +38,17 @@ const {
   CONTROLE_BUTTON_RETIRAR,
   CONTROLE_BUTTON_DEVOLVER,
   CONTROLE_BUTTON_VER,
-  CONTROLE_SELECT_RETIRAR,
-  CONTROLE_SELECT_DEVOLVER,
-  CONTROLE_MODAL_PREFIX,
+  CONTROLE_SELECT_CATEGORIA,
+  CONTROLE_SELECT_ITEM,
+  CONTROLE_BUTTON_VOLTAR,
+  CONTROLE_BUTTON_CANCELAR,
+  CONTROLE_BUTTON_CONFIRMAR,
+  CONTROLE_MODAL_QUANTIDADE,
   abrirSelecaoRetirar,
   abrirSelecaoDevolver,
-  processarModalControleBau,
   processarSelecaoControleBau,
+  processarModalControleBau,
+  processarBotaoControleBau,
   verEstoqueControleBau
 } = require("./utils/painelControleBau");
 
@@ -188,6 +192,15 @@ client.on("interactionCreate", async (interaction) => {
         return;
       }
 
+      if (
+        interaction.customId.startsWith(`${CONTROLE_BUTTON_VOLTAR}:`) ||
+        interaction.customId.startsWith(`${CONTROLE_BUTTON_CANCELAR}:`) ||
+        interaction.customId.startsWith(`${CONTROLE_BUTTON_CONFIRMAR}:`)
+      ) {
+        await processarBotaoControleBau(interaction);
+        return;
+      }
+
       if (interaction.customId === FARM_BUTTON_REGISTRAR) {
         await abrirModalFarm(interaction);
         return;
@@ -239,8 +252,8 @@ client.on("interactionCreate", async (interaction) => {
       }
 
       if (
-        interaction.customId === CONTROLE_SELECT_RETIRAR ||
-        interaction.customId === CONTROLE_SELECT_DEVOLVER
+        interaction.customId.startsWith(`${CONTROLE_SELECT_CATEGORIA}:`) ||
+        interaction.customId.startsWith(`${CONTROLE_SELECT_ITEM}:`)
       ) {
         await processarSelecaoControleBau(interaction);
         return;
@@ -280,7 +293,7 @@ client.on("interactionCreate", async (interaction) => {
         return;
       }
 
-      if (interaction.customId.startsWith(`${CONTROLE_MODAL_PREFIX}:`)) {
+      if (interaction.customId.startsWith(`${CONTROLE_MODAL_QUANTIDADE}:`)) {
         await processarModalControleBau(interaction);
         return;
       }

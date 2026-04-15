@@ -8,6 +8,8 @@ const {
   TextInputStyle,
   EmbedBuilder
 } = require("discord.js");
+
+const crypto = require("crypto");
 const ControleBau = require("../models/ControleBau");
 const MovimentacaoBau = require("../models/MovimentacaoBau");
 const { podeUsarControleBau } = require("./permissoes");
@@ -19,13 +21,23 @@ const CONTROLE_BUTTON_RETIRAR = "controle_bau_retirar";
 const CONTROLE_BUTTON_DEVOLVER = "controle_bau_devolver";
 const CONTROLE_BUTTON_VER = "controle_bau_ver";
 
-const CONTROLE_SELECT_RETIRAR = "controle_bau_select_retirar";
-const CONTROLE_SELECT_DEVOLVER = "controle_bau_select_devolver";
+const CONTROLE_SELECT_CATEGORIA = "controle_bau_select_categoria";
+const CONTROLE_SELECT_ITEM = "controle_bau_select_item";
 
-const CONTROLE_MODAL_PREFIX = "controle_bau_modal";
+const CONTROLE_BUTTON_VOLTAR = "controle_bau_voltar";
+const CONTROLE_BUTTON_CANCELAR = "controle_bau_cancelar";
+const CONTROLE_BUTTON_CONFIRMAR = "controle_bau_confirmar";
+
+const CONTROLE_MODAL_QUANTIDADE = "controle_bau_modal_quantidade";
 
 const CANAL_CONTROLE_ENTRADA = "1480507568265760812";
 const CANAL_CONTROLE_SAIDA = "1480507568265760814";
+
+const sessoesControleBau = new Map();
+
+function gerarToken() {
+  return crypto.randomBytes(8).toString("hex");
+}
 
 function normalizarTexto(txt) {
   return String(txt || "")
@@ -46,22 +58,53 @@ function formatarNomeBonito(item) {
     .join(" ");
 }
 
+function formatarQuantidade(valor) {
+  return new Intl.NumberFormat("pt-BR").format(Number(valor) || 0);
+}
+
 function getTipoItem(item) {
   const nome = normalizarItem(item);
   if (itensArmas.map(normalizarItem).includes(nome)) return "arma";
   return "geral";
 }
 
-function formatarQuantidade(valor) {
-  return new Intl.NumberFormat("pt-BR").format(Number(valor) || 0);
+function getCategorias() {
+  return [
+    {
+      key: "drogas",
+      label: "Drogas",
+      itens: ["cocaina", "maconha", "metanfetamina"]
+    },
+    {
+      key: "armas",
+      label: "Armas",
+      itens: ["g36c mk2", "mp5", "fn five seven", "hhk"]
+    },
+    {
+      key: "municoes",
+      label: "Munições",
+      itens: ["municao rifle", "municao pistola", "municao submetralhadora"]
+    },
+    {
+      key: "acao",
+      label: "Itens de ação",
+      itens: ["explosivo c4", "hacking", "furadeira", "lockpick", "envelope manchado", "chip ilegal"]
+    },
+    {
+      key: "utilitarios",
+      label: "Utilitários",
+      itens: ["algemas", "adrenalina", "capuz", "celular", "radio", "chave", "galao"]
+    },
+    {
+      key: "valores",
+      label: "Valores",
+      itens: ["dinheiro sujo"]
+    }
+  ];
 }
 
-function criarOpcoesItensComEstoque(itens) {
-  return itens.slice(0, 25).map((registro) => ({
-    label: formatarNomeBonito(registro.item),
-    value: normalizarItem(registro.item),
-    description: `Estoque atual: ${formatarQuantidade(registro.quantidade)}`
-  }));
+function encontrarCategoriaPorKey(key) {
+  return getCategorias().find((categoria) => categoria.key === key) || null;
 }
 
 function canalEhEntrada(channel) {
@@ -164,7 +207,12 @@ function criarPainelControleBau() {
         "• **Retirar item** → canal **saída**",
         "• **Ver estoque** → funciona nos dois",
         "",
-        "No **fórum**, os botões viram atalhos para abrir o canal certo."
+        "Agora o painel usa:",
+        "• categoria",
+        "• item",
+        "• quantidade",
+        "• confirmação",
+        "• voltar / cancelar"
       ].join("\n")
     )
     .setFooter({ text: "SINNERS BOT • Controle de Baú" })
@@ -197,104 +245,168 @@ function criarPainelControleBau() {
   };
 }
 
-async function abrirSelecaoRetirar(interaction) {
-  if (!podeUsarControleBau(interaction.member)) {
-    return interaction.reply({
-      content: "❌ Você não tem permissão para usar este painel.",
-      flags: 64
-    });
-  }
+function criarEmbedCategoria(acao) {
+  const titulo = acao === "retirar" ? "📤 Retirar item" : "📥 Devolver item";
 
-  if (isForumComandoBot(interaction.channel)) {
-    return responderRedirecionamentoForum(interaction, "retirar");
-  }
-
-  if (!validarCanalPorAcao("retirar", interaction.channel)) {
-    return interaction.reply({
-      content: mensagemCanalInvalido("retirar", interaction.channel),
-      flags: 64
-    });
-  }
-
-  const itens = await ControleBau.find({
-    item: { $not: /^gerencia_/i },
-    quantidade: { $gt: 0 }
-  }).sort({ item: 1 });
-
-  if (!itens.length) {
-    return interaction.reply({
-      content: "❌ Não há itens disponíveis no controle de baú para retirar.",
-      flags: 64
-    });
-  }
-
-  const select = new StringSelectMenuBuilder()
-    .setCustomId(CONTROLE_SELECT_RETIRAR)
-    .setPlaceholder("Selecione o item para retirar")
-    .addOptions(criarOpcoesItensComEstoque(itens));
-
-  const row = new ActionRowBuilder().addComponents(select);
-
-  return interaction.reply({
-    content: "Selecione o item que será retirado do controle de baú.",
-    components: [row],
-    flags: 64
-  });
+  return new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle(titulo)
+    .setDescription(
+      [
+        "**Etapa 1 de 4**",
+        "Escolha a categoria do produto."
+      ].join("\n")
+    )
+    .setFooter({ text: "SINNERS BOT • Controle de Baú" })
+    .setTimestamp();
 }
 
-async function abrirSelecaoDevolver(interaction) {
-  if (!podeUsarControleBau(interaction.member)) {
-    return interaction.reply({
-      content: "❌ Você não tem permissão para usar este painel.",
-      flags: 64
-    });
+function criarSelectCategoria(token) {
+  const categorias = getCategorias();
+
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(`${CONTROLE_SELECT_CATEGORIA}:${token}`)
+      .setPlaceholder("Selecione a categoria")
+      .addOptions(
+        categorias.map((categoria) => ({
+          label: categoria.label,
+          value: categoria.key,
+          description: `Abrir categoria ${categoria.label}`
+        }))
+      )
+  );
+}
+
+function criarEmbedItem(sessao, itensDisponiveis = []) {
+  const categoria = encontrarCategoriaPorKey(sessao.categoriaKey);
+  const titulo = sessao.acao === "retirar" ? "📤 Retirar item" : "📥 Devolver item";
+
+  const linhas = [
+    `**Etapa 2 de 4**`,
+    `Categoria: **${categoria?.label || "Não identificada"}**`,
+    "",
+    "Escolha o item."
+  ];
+
+  if (sessao.acao === "retirar" && itensDisponiveis.length) {
+    linhas.push("", "**Itens com estoque:**");
+    for (const registro of itensDisponiveis.slice(0, 10)) {
+      linhas.push(`• ${formatarNomeBonito(registro.item)} — ${formatarQuantidade(registro.quantidade)}`);
+    }
   }
 
-  if (isForumComandoBot(interaction.channel)) {
-    return responderRedirecionamentoForum(interaction, "devolver");
+  return new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle(titulo)
+    .setDescription(linhas.join("\n"))
+    .setFooter({ text: "SINNERS BOT • Controle de Baú" })
+    .setTimestamp();
+}
+
+function criarSelectItem(token, sessao, itensDisponiveis = []) {
+  const categoria = encontrarCategoriaPorKey(sessao.categoriaKey);
+  let opcoes = [];
+
+  if (sessao.acao === "retirar") {
+    opcoes = itensDisponiveis
+      .filter((registro) => categoria.itens.includes(normalizarItem(registro.item)))
+      .map((registro) => ({
+        label: formatarNomeBonito(registro.item),
+        value: normalizarItem(registro.item),
+        description: `Estoque atual: ${formatarQuantidade(registro.quantidade)}`
+      }));
+  } else {
+    opcoes = categoria.itens.map((item) => ({
+      label: formatarNomeBonito(item),
+      value: normalizarItem(item),
+      description: "Adicionar de volta ao controle"
+    }));
   }
 
-  if (!validarCanalPorAcao("devolver", interaction.channel)) {
-    return interaction.reply({
-      content: mensagemCanalInvalido("devolver", interaction.channel),
-      flags: 64
-    });
+  if (!opcoes.length) {
+    opcoes = [{
+      label: "Sem itens disponíveis",
+      value: "__sem_itens__",
+      description: "Nenhum item encontrado nesta categoria"
+    }];
   }
 
-  const todos = [...itensGerais, ...itensArmas];
-  const select = new StringSelectMenuBuilder()
-    .setCustomId(CONTROLE_SELECT_DEVOLVER)
-    .setPlaceholder("Selecione o item para devolver")
-    .addOptions(
-      todos.slice(0, 25).map((item) => ({
-        label: formatarNomeBonito(item),
-        value: normalizarItem(item),
-        description: "Adicionar de volta ao controle"
-      }))
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(`${CONTROLE_SELECT_ITEM}:${token}`)
+      .setPlaceholder("Selecione o item")
+      .addOptions(opcoes.slice(0, 25))
+  );
+}
+
+function criarEmbedConfirmacao(sessao, estoqueAtual) {
+  const titulo = sessao.acao === "retirar" ? "✅ Confirmar retirada" : "✅ Confirmar devolução";
+
+  return new EmbedBuilder()
+    .setColor(sessao.acao === "retirar" ? 0xed4245 : 0x57f287)
+    .setTitle(titulo)
+    .setDescription(
+      [
+        `**Etapa 4 de 4**`,
+        `Ação: **${sessao.acao}**`,
+        `Categoria: **${encontrarCategoriaPorKey(sessao.categoriaKey)?.label || "Não identificada"}**`,
+        `Item: **${formatarNomeBonito(sessao.item)}**`,
+        `Quantidade: **${formatarQuantidade(sessao.quantidade)}**`,
+        `Estoque atual: **${formatarQuantidade(estoqueAtual)}**`,
+        `Estoque após ação: **${formatarQuantidade(sessao.acao === "retirar" ? estoqueAtual - sessao.quantidade : estoqueAtual + sessao.quantidade)}**`,
+        `Observação: **${sessao.observacao || "Sem observação"}**`
+      ].join("\n")
+    )
+    .setFooter({ text: "SINNERS BOT • Confirmação" })
+    .setTimestamp();
+}
+
+function criarBotoesNavegacao(token, etapaAtual, podeConfirmar = false) {
+  const row = new ActionRowBuilder();
+
+  if (etapaAtual !== "categoria") {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${CONTROLE_BUTTON_VOLTAR}:${token}`)
+        .setLabel("Voltar")
+        .setEmoji("⬅️")
+        .setStyle(ButtonStyle.Secondary)
     );
+  }
 
-  const row = new ActionRowBuilder().addComponents(select);
+  row.addComponents(
+    new ButtonBuilder()
+      .setCustomId(`${CONTROLE_BUTTON_CANCELAR}:${token}`)
+      .setLabel("Cancelar")
+      .setEmoji("❌")
+      .setStyle(ButtonStyle.Secondary)
+  );
 
-  return interaction.reply({
-    content: "Selecione o item que será devolvido ao controle de baú.",
-    components: [row],
-    flags: 64
-  });
+  if (podeConfirmar) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${CONTROLE_BUTTON_CONFIRMAR}:${token}`)
+        .setLabel("Confirmar")
+        .setEmoji("✅")
+        .setStyle(ButtonStyle.Success)
+    );
+  }
+
+  return row;
 }
 
-async function processarSelecaoControleBau(interaction) {
+async function abrirFluxoControle(interaction, acao) {
   if (!podeUsarControleBau(interaction.member)) {
     return interaction.reply({
-      content: "❌ Você não tem permissão para esta ação.",
+      content: "❌ Você não tem permissão para usar este painel.",
       flags: 64
     });
   }
 
-  const item = interaction.values?.[0];
-  let acao = "";
-
-  if (interaction.customId === CONTROLE_SELECT_RETIRAR) acao = "retirar";
-  if (interaction.customId === CONTROLE_SELECT_DEVOLVER) acao = "devolver";
+  if (isForumComandoBot(interaction.channel)) {
+    return responderRedirecionamentoForum(interaction, acao);
+  }
 
   if (!validarCanalPorAcao(acao, interaction.channel)) {
     return interaction.reply({
@@ -303,14 +415,115 @@ async function processarSelecaoControleBau(interaction) {
     });
   }
 
+  const token = gerarToken();
+
+  sessoesControleBau.set(token, {
+    token,
+    userId: interaction.user.id,
+    guildId: interaction.guildId,
+    channelId: interaction.channelId,
+    acao,
+    etapa: "categoria",
+    categoriaKey: null,
+    item: null,
+    quantidade: null,
+    observacao: null
+  });
+
+  return interaction.reply({
+    embeds: [criarEmbedCategoria(acao)],
+    components: [
+      criarSelectCategoria(token),
+      criarBotoesNavegacao(token, "categoria")
+    ],
+    flags: 64
+  });
+}
+
+async function abrirSelecaoRetirar(interaction) {
+  return abrirFluxoControle(interaction, "retirar");
+}
+
+async function abrirSelecaoDevolver(interaction) {
+  return abrirFluxoControle(interaction, "devolver");
+}
+
+async function processarSelecaoCategoria(interaction, token) {
+  const sessao = sessoesControleBau.get(token);
+
+  if (!sessao) {
+    return interaction.reply({
+      content: "❌ Esta sessão expirou. Abra o painel novamente.",
+      flags: 64
+    });
+  }
+
+  if (sessao.userId !== interaction.user.id) {
+    return interaction.reply({
+      content: "❌ Apenas quem abriu este fluxo pode continuar.",
+      flags: 64
+    });
+  }
+
+  const categoriaKey = interaction.values?.[0];
+  sessao.categoriaKey = categoriaKey;
+  sessao.etapa = "item";
+  sessoesControleBau.set(token, sessao);
+
+  let itensDisponiveis = [];
+  if (sessao.acao === "retirar") {
+    itensDisponiveis = await ControleBau.find({
+      item: { $not: /^gerencia_/i },
+      quantidade: { $gt: 0 }
+    }).sort({ item: 1 });
+  }
+
+  return interaction.update({
+    embeds: [criarEmbedItem(sessao, itensDisponiveis)],
+    components: [
+      criarSelectItem(token, sessao, itensDisponiveis),
+      criarBotoesNavegacao(token, "item")
+    ]
+  });
+}
+
+async function processarSelecaoItem(interaction, token) {
+  const sessao = sessoesControleBau.get(token);
+
+  if (!sessao) {
+    return interaction.reply({
+      content: "❌ Esta sessão expirou. Abra o painel novamente.",
+      flags: 64
+    });
+  }
+
+  if (sessao.userId !== interaction.user.id) {
+    return interaction.reply({
+      content: "❌ Apenas quem abriu este fluxo pode continuar.",
+      flags: 64
+    });
+  }
+
+  const item = interaction.values?.[0];
+  if (item === "__sem_itens__") {
+    return interaction.reply({
+      content: "❌ Não há itens disponíveis nesta categoria.",
+      flags: 64
+    });
+  }
+
+  sessao.item = item;
+  sessao.etapa = "quantidade";
+  sessoesControleBau.set(token, sessao);
+
   const modal = new ModalBuilder()
-    .setCustomId(`${CONTROLE_MODAL_PREFIX}:${acao}:${item}`)
-    .setTitle(`Controle de Baú • ${acao}`);
+    .setCustomId(`${CONTROLE_MODAL_QUANTIDADE}:${token}`)
+    .setTitle(`Controle de Baú • ${sessao.acao}`);
 
   const quantidade = new TextInputBuilder()
     .setCustomId("quantidade")
     .setLabel("Quantidade")
-    .setPlaceholder("Ex: 100")
+    .setPlaceholder("Ex: 10")
     .setStyle(TextInputStyle.Short)
     .setRequired(true)
     .setMaxLength(10);
@@ -318,7 +531,7 @@ async function processarSelecaoControleBau(interaction) {
   const observacao = new TextInputBuilder()
     .setCustomId("observacao")
     .setLabel("Observação")
-    .setPlaceholder("Ex: ação da facção / devolução / retirada")
+    .setPlaceholder("Ex: ação, patrulha, devolução")
     .setStyle(TextInputStyle.Paragraph)
     .setRequired(false)
     .setMaxLength(300);
@@ -331,19 +544,19 @@ async function processarSelecaoControleBau(interaction) {
   return interaction.showModal(modal);
 }
 
-async function processarModalControleBau(interaction) {
-  if (!podeUsarControleBau(interaction.member)) {
+async function processarModalQuantidade(interaction, token) {
+  const sessao = sessoesControleBau.get(token);
+
+  if (!sessao) {
     return interaction.reply({
-      content: "❌ Você não tem permissão para esta ação.",
+      content: "❌ Esta sessão expirou. Abra o painel novamente.",
       flags: 64
     });
   }
 
-  const [, acao, item] = interaction.customId.split(":");
-
-  if (!validarCanalPorAcao(acao, interaction.channel)) {
+  if (sessao.userId !== interaction.user.id) {
     return interaction.reply({
-      content: mensagemCanalInvalido(acao, interaction.channel),
+      content: "❌ Apenas quem abriu este fluxo pode continuar.",
       flags: 64
     });
   }
@@ -358,79 +571,253 @@ async function processarModalControleBau(interaction) {
     });
   }
 
-  const itemNormalizado = normalizarItem(item);
-  const tipoItem = getTipoItem(itemNormalizado);
-
-  let registro = await ControleBau.findOne({ item: itemNormalizado });
+  let registro = await ControleBau.findOne({ item: normalizarItem(sessao.item) });
 
   if (!registro) {
     registro = new ControleBau({
-      item: itemNormalizado,
+      item: normalizarItem(sessao.item),
       quantidade: 0,
-      tipo: tipoItem
+      tipo: getTipoItem(sessao.item)
     });
   }
 
-  if (acao === "retirar" && registro.quantidade < quantidade) {
+  if (sessao.acao === "retirar" && registro.quantidade < quantidade) {
     return interaction.reply({
       content: `❌ Estoque insuficiente para retirar. Atual: **${formatarQuantidade(registro.quantidade)}**`,
       flags: 64
     });
   }
 
-  if (acao === "retirar") registro.quantidade -= quantidade;
-  if (acao === "devolver") registro.quantidade += quantidade;
+  sessao.quantidade = quantidade;
+  sessao.observacao = observacao;
+  sessao.etapa = "confirmacao";
+  sessoesControleBau.set(token, sessao);
+
+  return interaction.reply({
+    embeds: [criarEmbedConfirmacao(sessao, registro.quantidade)],
+    components: [criarBotoesNavegacao(token, "confirmacao", true)],
+    flags: 64
+  });
+}
+
+async function voltarFluxo(interaction, token) {
+  const sessao = sessoesControleBau.get(token);
+
+  if (!sessao) {
+    return interaction.reply({
+      content: "❌ Esta sessão expirou. Abra o painel novamente.",
+      flags: 64
+    });
+  }
+
+  if (sessao.userId !== interaction.user.id) {
+    return interaction.reply({
+      content: "❌ Apenas quem abriu este fluxo pode continuar.",
+      flags: 64
+    });
+  }
+
+  if (sessao.etapa === "item") {
+    sessao.categoriaKey = null;
+    sessao.etapa = "categoria";
+    sessoesControleBau.set(token, sessao);
+
+    return interaction.update({
+      embeds: [criarEmbedCategoria(sessao.acao)],
+      components: [
+        criarSelectCategoria(token),
+        criarBotoesNavegacao(token, "categoria")
+      ]
+    });
+  }
+
+  if (sessao.etapa === "confirmacao") {
+    sessao.quantidade = null;
+    sessao.observacao = null;
+    sessao.etapa = "item";
+    sessoesControleBau.set(token, sessao);
+
+    let itensDisponiveis = [];
+    if (sessao.acao === "retirar") {
+      itensDisponiveis = await ControleBau.find({
+        item: { $not: /^gerencia_/i },
+        quantidade: { $gt: 0 }
+      }).sort({ item: 1 });
+    }
+
+    return interaction.update({
+      embeds: [criarEmbedItem(sessao, itensDisponiveis)],
+      components: [
+        criarSelectItem(token, sessao, itensDisponiveis),
+        criarBotoesNavegacao(token, "item")
+      ]
+    });
+  }
+
+  return interaction.reply({
+    content: "❌ Não há etapa anterior disponível.",
+    flags: 64
+  });
+}
+
+async function cancelarFluxo(interaction, token) {
+  const sessao = sessoesControleBau.get(token);
+
+  if (sessao && sessao.userId !== interaction.user.id) {
+    return interaction.reply({
+      content: "❌ Apenas quem abriu este fluxo pode cancelar.",
+      flags: 64
+    });
+  }
+
+  sessoesControleBau.delete(token);
+
+  if (interaction.deferred || interaction.replied) {
+    return interaction.followUp({
+      content: "❌ Operação cancelada.",
+      flags: 64
+    });
+  }
+
+  if (interaction.isButton() || interaction.isStringSelectMenu()) {
+    return interaction.update({
+      content: "❌ Operação cancelada.",
+      embeds: [],
+      components: []
+    });
+  }
+
+  return interaction.reply({
+    content: "❌ Operação cancelada.",
+    flags: 64
+  });
+}
+
+async function confirmarFluxo(interaction, token) {
+  const sessao = sessoesControleBau.get(token);
+
+  if (!sessao) {
+    return interaction.reply({
+      content: "❌ Esta sessão expirou. Abra o painel novamente.",
+      flags: 64
+    });
+  }
+
+  if (sessao.userId !== interaction.user.id) {
+    return interaction.reply({
+      content: "❌ Apenas quem abriu este fluxo pode confirmar.",
+      flags: 64
+    });
+  }
+
+  let registro = await ControleBau.findOne({ item: normalizarItem(sessao.item) });
+
+  if (!registro) {
+    registro = new ControleBau({
+      item: normalizarItem(sessao.item),
+      quantidade: 0,
+      tipo: getTipoItem(sessao.item)
+    });
+  }
+
+  if (sessao.acao === "retirar" && registro.quantidade < sessao.quantidade) {
+    sessoesControleBau.delete(token);
+    return interaction.update({
+      content: `❌ Estoque insuficiente para retirar. Atual: **${formatarQuantidade(registro.quantidade)}**`,
+      embeds: [],
+      components: []
+    });
+  }
+
+  if (sessao.acao === "retirar") registro.quantidade -= sessao.quantidade;
+  if (sessao.acao === "devolver") registro.quantidade += sessao.quantidade;
 
   await registro.save();
 
   await MovimentacaoBau.create({
     userId: interaction.user.id,
     username: interaction.user.username,
-    item: itemNormalizado,
-    quantidade,
-    tipoMovimentacao: acao,
-    observacao,
+    item: normalizarItem(sessao.item),
+    quantidade: sessao.quantidade,
+    tipoMovimentacao: sessao.acao,
+    observacao: sessao.observacao || "Sem observação",
     canalId: interaction.channelId,
     canalNome: interaction.channel?.name || "canal-desconhecido",
     tipo: "controle_bau",
-    acao,
+    acao: sessao.acao,
     cargo: "membro",
     registradoEm: new Date()
   });
 
   await enviarLogBonito(interaction.client, {
-    color: acao === "retirar" ? 0xed4245 : 0x5865f2,
+    color: sessao.acao === "retirar" ? 0xed4245 : 0x5865f2,
     title:
-      acao === "retirar"
+      sessao.acao === "retirar"
         ? "📤 Item retirado do Controle de Baú"
         : "📥 Item devolvido ao Controle de Baú",
     description: "Movimentação registrada no estoque liberado aos membros.",
     fields: [
-      criarCampo("📦 Item", `**${formatarNomeBonito(itemNormalizado)}**`),
-      criarCampo("🔢 Quantidade", `**${formatarQuantidade(quantidade)}**`),
+      criarCampo("📦 Item", `**${formatarNomeBonito(sessao.item)}**`),
+      criarCampo("🔢 Quantidade", `**${formatarQuantidade(sessao.quantidade)}**`),
       criarCampo("📊 Estoque atual", `**${formatarQuantidade(registro.quantidade)}**`),
       criarCampo("👤 Responsável", `**${interaction.user.username}**`),
-      criarCampo("📝 Observação", observacao, false)
+      criarCampo("📝 Observação", sessao.observacao || "Sem observação", false)
     ]
   });
 
   const embed = new EmbedBuilder()
-    .setColor(acao === "retirar" ? 0xed4245 : 0x5865f2)
+    .setColor(sessao.acao === "retirar" ? 0xed4245 : 0x5865f2)
     .setTitle("✅ Movimentação registrada")
     .addFields(
-      { name: "📦 Item", value: `**${formatarNomeBonito(itemNormalizado)}**`, inline: true },
-      { name: "⚙️ Ação", value: `**${acao}**`, inline: true },
-      { name: "🔢 Quantidade", value: `**${formatarQuantidade(quantidade)}**`, inline: true },
+      { name: "📦 Item", value: `**${formatarNomeBonito(sessao.item)}**`, inline: true },
+      { name: "⚙️ Ação", value: `**${sessao.acao}**`, inline: true },
+      { name: "🔢 Quantidade", value: `**${formatarQuantidade(sessao.quantidade)}**`, inline: true },
       { name: "📊 Estoque atual", value: `**${formatarQuantidade(registro.quantidade)}**`, inline: true },
-      { name: "📝 Observação", value: observacao, inline: false }
+      { name: "📝 Observação", value: sessao.observacao || "Sem observação", inline: false }
     )
     .setFooter({ text: "SINNERS BOT • Controle de Baú" })
     .setTimestamp();
 
-  return interaction.reply({
+  sessoesControleBau.delete(token);
+
+  return interaction.update({
     embeds: [embed],
-    flags: 64
+    components: []
   });
+}
+
+async function processarSelecaoControleBau(interaction) {
+  const [prefixo, token] = interaction.customId.split(":");
+
+  if (prefixo === CONTROLE_SELECT_CATEGORIA) {
+    return processarSelecaoCategoria(interaction, token);
+  }
+
+  if (prefixo === CONTROLE_SELECT_ITEM) {
+    return processarSelecaoItem(interaction, token);
+  }
+}
+
+async function processarModalControleBau(interaction) {
+  const [, token] = interaction.customId.split(":");
+  return processarModalQuantidade(interaction, token);
+}
+
+async function processarBotaoControleBau(interaction) {
+  if (interaction.customId.startsWith(`${CONTROLE_BUTTON_VOLTAR}:`)) {
+    const [, token] = interaction.customId.split(":");
+    return voltarFluxo(interaction, token);
+  }
+
+  if (interaction.customId.startsWith(`${CONTROLE_BUTTON_CANCELAR}:`)) {
+    const [, token] = interaction.customId.split(":");
+    return cancelarFluxo(interaction, token);
+  }
+
+  if (interaction.customId.startsWith(`${CONTROLE_BUTTON_CONFIRMAR}:`)) {
+    const [, token] = interaction.customId.split(":");
+    return confirmarFluxo(interaction, token);
+  }
 }
 
 async function verEstoqueControleBau(interaction) {
@@ -484,13 +871,17 @@ module.exports = {
   CONTROLE_BUTTON_RETIRAR,
   CONTROLE_BUTTON_DEVOLVER,
   CONTROLE_BUTTON_VER,
-  CONTROLE_SELECT_RETIRAR,
-  CONTROLE_SELECT_DEVOLVER,
-  CONTROLE_MODAL_PREFIX,
+  CONTROLE_SELECT_CATEGORIA,
+  CONTROLE_SELECT_ITEM,
+  CONTROLE_BUTTON_VOLTAR,
+  CONTROLE_BUTTON_CANCELAR,
+  CONTROLE_BUTTON_CONFIRMAR,
+  CONTROLE_MODAL_QUANTIDADE,
   abrirSelecaoRetirar,
   abrirSelecaoDevolver,
-  processarModalControleBau,
   processarSelecaoControleBau,
+  processarModalControleBau,
+  processarBotaoControleBau,
   verEstoqueControleBau,
   criarPainelControleBau
 };
